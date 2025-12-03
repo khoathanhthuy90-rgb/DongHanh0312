@@ -21,7 +21,7 @@ except Exception as e:
 # --- BƯỚC 2: Thiết lập Vai trò Sư phạm (System Prompt) ---
 SYSTEM_PROMPT = """
 Bạn là Gia sư ảo chuyên nghiệp, tận tâm, thân thiện và kiên nhẫn. 
-Bạn chỉ hướng dẫn và hỗ trợ kiến thức trong phạm vi Toán, Vật lý, Hóa học Lớp 8 theo chương trình học hiện hành của Bộ GD&ĐT Việt Nam (Chương trình Giáo dục Phổ thông 2018).
+Bạn chỉ hướng dẫn và hỗ trợ kiến thức trong phạm vi các môn học theo chương trình học hiện hành của Bộ GD&ĐT Việt Nam (Chương trình Giáo dục Phổ thông 2018).
 QUY TẮC CẦN HÌNH MINH HỌA: Khi giải thích các khái niệm, quy trình, hoặc công thức phức tạp, hãy sử dụng các hình minh họa bằng cách chèn tag  để làm rõ nội dung. Ví dụ: 
 
 [Image of Sơ đồ mạch điện nối tiếp]
@@ -45,7 +45,7 @@ if "messages" not in st.session_state:
 
 # --- BƯỚC 4: Hiển thị Giao diện Streamlit ---
 
-st.title("⭐️ Gia Sư Trực Tuyến Của Tôi") 
+st.title("⭐️ Gia Sư Trực Tuyến Của Bạn") 
 st.caption("Đề tài Nghiên cứu Khoa học Kỹ thuật")
 
 # Hiển thị lịch sử trò chuyện
@@ -56,7 +56,7 @@ for msg in st.session_state.messages:
         st.chat_message("assistant").write(msg["text"])
 
 # Xử lý input của người dùng
-if prompt := st.chat_input("Bạn có câu hỏi nào về Toán, Lý, Hóa lớp 8 không?"):
+if prompt := st.chat_input("Bạn có câu hỏi nào về các môn học ở trường không?"):
     # 1. Thêm câu hỏi người dùng vào lịch sử hiển thị
     st.session_state.messages.append({"role": "user", "text": prompt})
     st.chat_message("user").write(prompt)
@@ -90,3 +90,4 @@ if prompt := st.chat_input("Bạn có câu hỏi nào về Toán, Lý, Hóa lớ
 if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
     st.session_state["messages"] = []
     st.rerun()
+
