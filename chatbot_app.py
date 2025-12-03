@@ -45,7 +45,7 @@ if "messages" not in st.session_state:
 
 # --- BƯỚC 4: Hiển thị Giao diện Streamlit ---
 
-st.title("⭐️ Gia Sư Trực Tuyến Của Bạn") 
+st.title("⭐️ Gia Sư Trực Tuyến Của Tôi") 
 st.caption("Đề tài Nghiên cứu Khoa học Kỹ thuật")
 
 # Hiển thị lịch sử trò chuyện
@@ -56,7 +56,7 @@ for msg in st.session_state.messages:
         st.chat_message("assistant").write(msg["text"])
 
 # Xử lý input của người dùng
-if prompt := st.chat_input("Bạn có câu hỏi nào về các môn học ở trường không?"):
+if prompt := st.chat_input("Bạn có câu hỏi nào về Toán, Lý, Hóa lớp 8 không?"):
     # 1. Thêm câu hỏi người dùng vào lịch sử hiển thị
     st.session_state.messages.append({"role": "user", "text": prompt})
     st.chat_message("user").write(prompt)
