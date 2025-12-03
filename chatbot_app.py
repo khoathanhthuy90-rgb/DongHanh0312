@@ -48,8 +48,6 @@ if prompt := st.chat_input("Hãy hỏi bài tập hoặc khái niệm Lớp 8 m�
 
     # Gọi API để nhận phản hồi từ Chatbot
     try:
-        with # ... (Khối if prompt)
-    try:
         with st.spinner("Gia sư đang suy nghĩ..."):
             response = client.models.generate_content(
                 # ... Lệnh gọi API
@@ -68,4 +66,5 @@ if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
     st.session_state["messages"] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     st.rerun()
+
 
