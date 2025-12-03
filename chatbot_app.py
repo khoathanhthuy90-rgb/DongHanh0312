@@ -3,17 +3,23 @@ from google import genai
 from dotenv import load_dotenv
 import os
 
-# --- BƯỚC 1: Tải Khóa API (Đảm bảo file .env đã được tạo) ---
-# Nếu bạn dùng Google Gemini, bạn cần thay bằng thư viện và khóa API của Gemini
+# --- BƯỚC 1: Tải Khóa API và Khởi tạo Client ---
+# Ghi chú: Sử dụng GEMINI_API_KEY
 load_dotenv()
-try:
-    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-except Exception:
-    st.error("Lỗi: Không tìm thấy OPENAI_API_KEY. Vui lòng kiểm tra file .env!")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    st.error("Lỗi: Không tìm thấy Khóa API GEMINI_API_KEY. Vui lòng dán khóa vào mục Secrets trên Streamlit Cloud.")
     st.stop()
-    
-# --- BƯỚC 2: Thiết lập Vai trò Sư phạm (Prompt Engineering Cốt lõi) ---
-# Dùng để định hướng Chatbot trả lời theo nguyên tắc gia sư Lớp 8
+
+try:
+    client = genai.Client(api_key=GEMINI_API_KEY)
+except Exception as e:
+    st.error(f"Lỗi khởi tạo Gemini Client: {e}")
+    st.stop()
+
+
+# --- BƯỚC 2: Thiết lập Vai trò Sư phạm (System Prompt) ---
 SYSTEM_PROMPT = """
 Bạn là Gia sư ảo chuyên nghiệp, tận tâm, thân thiện và kiên nhẫn. 
 Bạn chỉ hướng dẫn và hỗ trợ kiến thức trong phạm vi Toán, Vật lý, Hóa học Lớp 8 theo chương trình học hiện hành của Bộ GD&ĐT Việt Nam.
@@ -22,13 +28,11 @@ Luôn dùng giọng điệu khuyến khích, tích cực, phù hợp với học
 """
 
 # --- BƯỚC 3: Quản lý Phiên (Session Management) ---
-# Dùng để Chatbot nhớ được lịch sử trò chuyện của từng người dùng
+
+MODEL_NAME = "gemini-2.5-flash"
 
 if "messages" not in st.session_state:
-    # Khởi tạo lịch sử chat với System Prompt (để thiết lập vai trò)
-    st.session_state["messages"] = [
-        {"role": "system", "content": SYSTEM_PROMPT}
-    ]
+    st.session_state["messages"] = []
 
 # --- BƯỚC 4: Hiển thị Giao diện Streamlit ---
 
@@ -37,34 +41,44 @@ st.caption("Đề tài Nghiên cứu Khoa học Kỹ thuật")
 
 # Hiển thị lịch sử trò chuyện
 for msg in st.session_state.messages:
-    if msg["role"] != "system": # Không hiển thị System Prompt
-        st.chat_message(msg["role"]).write(msg["content"])
+    if msg["role"] == "user":
+        st.chat_message("user").write(msg["text"])
+    elif msg["role"] == "model":
+        st.chat_message("assistant").write(msg["text"])
 
 # Xử lý input của người dùng
 if prompt := st.chat_input("Hãy hỏi bài tập hoặc khái niệm Lớp 8 mà bạn đang thắc mắc..."):
-    # Thêm câu hỏi người dùng vào lịch sử
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # 1. Thêm câu hỏi người dùng vào lịch sử hiển thị
+    st.session_state.messages.append({"role": "user", "text": prompt})
     st.chat_message("user").write(prompt)
 
-    # Gọi API để nhận phản hồi từ Chatbot
+    # 2. Chuẩn bị lịch sử chat cho Gemini API
+    # Chuyển đổi định dạng Streamlit sang định dạng Gemini
+    gemini_history = [{"role": m["role"], "parts": [{"text": m["text"]}]} for m in st.session_state.messages]
+    
     try:
-        with st.spinner("Gia sư đang suy nghĩ..."):
-            response = client.models.generate_content(
-                # ... Lệnh gọi API
+        with st.spinner("Gia sư đang suy nghĩ..."):
+            # 3. Gọi API để nhận phản hồi từ Chatbot
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=gemini_history,
+                config={
+                    "system_instruction": SYSTEM_PROMPT 
+                }
             )
-return response.text  # <--- Dòng gây lỗi (Dòng 57)
-        
-        # Lấy phản hồi và hiển thị
-        msg = response.choices[0].message # <--- Đây là code của OpenAI, không phải Gemini
-# ... (Khối except)
         
+        # 4. Lấy phản hồi từ Gemini và hiển thị
+        assistant_response = response.text
+        
+        # 5. Hiển thị và Lưu phản hồi của AI
+        st.session_state.messages.append({"role": "model", "text": assistant_response})
+        st.chat_message("assistant").write(assistant_response)
+            
     except Exception as e:
-        st.error(f"Lỗi kết nối AI: {e}. Vui lòng kiểm tra Khóa API và kết nối mạng.")
+        # Khối except bắt lỗi và hiển thị
+        st.error(f"Lỗi kết nối AI: {e}. Vui lòng kiểm tra Khóa API và trạng thái tài khoản Gemini.")
 
-# --- Nút Xóa Lịch sử (Để kiểm tra và bắt đầu phiên mới) ---
+# --- Nút Xóa Lịch sử ---
 if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
-    st.session_state["messages"] = [{"role": "system", "content": SYSTEM_PROMPT}]
-
+    st.session_state["messages"] = []
     st.rerun()
-
-
