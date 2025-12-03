@@ -1,5 +1,5 @@
 import streamlit as st
-import openai
+from google import genai
 from dotenv import load_dotenv
 import os
 
@@ -7,7 +7,7 @@ import os
 # Nếu bạn dùng Google Gemini, bạn cần thay bằng thư viện và khóa API của Gemini
 load_dotenv()
 try:
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 except Exception:
     st.error("Lỗi: Không tìm thấy OPENAI_API_KEY. Vui lòng kiểm tra file .env!")
     st.stop()
@@ -49,10 +49,12 @@ if prompt := st.chat_input("Hãy hỏi bài tập hoặc khái niệm Lớp 8 m�
     # Gọi API để nhận phản hồi từ Chatbot
     try:
         with st.spinner("Gia sư đang suy nghĩ..."):
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo", # Có thể nâng cấp lên gpt-4
-                messages=st.session_state.messages
-            )
+            response = client.models.generate_content(
+    model='gemini-2.5-flash', # Mô hình miễn phí
+    contents=messages, # Sử dụng cùng mảng tin nhắn đã có
+    config={"system_instruction": system_prompt}
+)
+return response.text
         
         # Lấy phản hồi và hiển thị
         msg = response.choices[0].message
@@ -65,4 +67,5 @@ if prompt := st.chat_input("Hãy hỏi bài tập hoặc khái niệm Lớp 8 m�
 # --- Nút Xóa Lịch sử (Để kiểm tra và bắt đầu phiên mới) ---
 if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
     st.session_state["messages"] = [{"role": "system", "content": SYSTEM_PROMPT}]
+
     st.rerun()
