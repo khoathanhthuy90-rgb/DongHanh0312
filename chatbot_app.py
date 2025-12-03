@@ -48,18 +48,17 @@ if prompt := st.chat_input("Hãy hỏi bài tập hoặc khái niệm Lớp 8 m�
 
     # Gọi API để nhận phản hồi từ Chatbot
     try:
-        with st.spinner("Gia sư đang suy nghĩ..."):
-            response = client.models.generate_content(
-    model='gemini-2.5-flash', # Mô hình miễn phí
-    contents=messages, # Sử dụng cùng mảng tin nhắn đã có
-    config={"system_instruction": system_prompt}
-)
-return response.text
-        
-        # Lấy phản hồi và hiển thị
-        msg = response.choices[0].message
-        st.session_state.messages.append(msg)
-        st.chat_message("assistant").write(msg.content)
+        with # ... (Khối if prompt)
+    try:
+        with st.spinner("Gia sư đang suy nghĩ..."):
+            response = client.models.generate_content(
+                # ... Lệnh gọi API
+            )
+return response.text  # <--- Dòng gây lỗi (Dòng 57)
+        
+        # Lấy phản hồi và hiển thị
+        msg = response.choices[0].message # <--- Đây là code của OpenAI, không phải Gemini
+# ... (Khối except)
         
     except Exception as e:
         st.error(f"Lỗi kết nối AI: {e}. Vui lòng kiểm tra Khóa API và kết nối mạng.")
@@ -69,3 +68,4 @@ if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
     st.session_state["messages"] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     st.rerun()
+
