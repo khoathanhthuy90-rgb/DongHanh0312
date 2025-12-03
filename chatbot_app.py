@@ -36,7 +36,7 @@ if "messages" not in st.session_state:
 
 # --- BƯỚC 4: Hiển thị Giao diện Streamlit ---
 
-st.title("🤖 Chatbot AI Gia Sư Ảo Lớp 8")
+st.title("🤖 Chatbot AI_Gia Sư Ảo")
 st.caption("Đề tài Nghiên cứu Khoa học Kỹ thuật")
 
 # Hiển thị lịch sử trò chuyện
@@ -47,7 +47,7 @@ for msg in st.session_state.messages:
         st.chat_message("assistant").write(msg["text"])
 
 # Xử lý input của người dùng
-if prompt := st.chat_input("Hãy hỏi bài tập hoặc khái niệm Lớp 8 mà bạn đang thắc mắc..."):
+if prompt := st.chat_input("Hãy hỏi kiến thức mà bạn đang thắc mắc..."):
     # 1. Thêm câu hỏi người dùng vào lịch sử hiển thị
     st.session_state.messages.append({"role": "user", "text": prompt})
     st.chat_message("user").write(prompt)
@@ -82,3 +82,4 @@ if prompt := st.chat_input("Hãy hỏi bài tập hoặc khái niệm Lớp 8 m�
 if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
     st.session_state["messages"] = []
     st.rerun()
+
