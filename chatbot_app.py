@@ -91,8 +91,4 @@ if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
     st.session_state["messages"] = []
     st.rerun()
 
-
-
-
 Tôi hy vọng lần này bạn sẽ thấy code. Chúc bạn thành công với việc triển khai!
-
