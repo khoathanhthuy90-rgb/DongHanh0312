@@ -27,7 +27,7 @@ mkl_random
 narwhals==2.13.0
 numexpr
 numpy
-openai==2.8.1
+google-genai
 packaging==25.0
 pandas
 pillow==12.0.0
@@ -55,4 +55,5 @@ typing_extensions==4.15.0
 tzdata 
 urllib3==2.5.0
 watchdog==6.0.0
+
 
