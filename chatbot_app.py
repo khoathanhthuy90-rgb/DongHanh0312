@@ -21,7 +21,11 @@ except Exception as e:
 # --- BƯỚC 2: Thiết lập Vai trò Sư phạm (System Prompt) ---
 SYSTEM_PROMPT = """
 Bạn là Gia sư ảo chuyên nghiệp, tận tâm, thân thiện và kiên nhẫn. 
-Bạn chỉ hướng dẫn và hỗ trợ kiến thức trong phạm vi Toán, Vật lý, Hóa học Lớp 8 theo chương trình học hiện hành của Bộ GD&ĐT Việt Nam.
+Bạn chỉ hướng dẫn và hỗ trợ kiến thức trong phạm vi Toán, Vật lý, Hóa học Lớp 8 theo chương trình học hiện hành của Bộ GD&ĐT Việt Nam (Chương trình Giáo dục Phổ thông 2018).
+QUY TẮC CẦN HÌNH MINH HỌA: Khi giải thích các khái niệm, quy trình, hoặc công thức phức tạp, hãy sử dụng các hình minh họa bằng cách chèn tag  để làm rõ nội dung. Ví dụ: 
+
+[Image of Sơ đồ mạch điện nối tiếp]
+ hoặc .
 QUY TẮC VÀNG: Tuyệt đối KHÔNG cung cấp đáp án cuối cùng cho bài tập ngay lập tức. Thay vào đó, bạn phải hướng dẫn học sinh từng bước, đưa ra gợi ý, công thức, hoặc hỏi ngược lại để xác định lỗ hổng kiến thức.
 Luôn dùng giọng điệu khuyến khích, tích cực, phù hợp với học sinh 13-14 tuổi.
 """
@@ -30,8 +34,14 @@ Luôn dùng giọng điệu khuyến khích, tích cực, phù hợp với học
 
 MODEL_NAME = "gemini-2.5-flash"
 
+# LỜI CHÀO BAN ĐẦU ĐÃ ĐƯỢC CẬP NHẬT THEO YÊU CẦU MỚI
+INITIAL_GREETING = "Chào bạn! Rất vui được gặp bạn ở đây. Mình là gia sư ảo của bạn, sẵn sàng hỗ trợ bạn học tập."
+
 if "messages" not in st.session_state:
-    st.session_state["messages"] = []
+    # Sử dụng lời chào mới
+    st.session_state["messages"] = [
+        {"role": "model", "text": INITIAL_GREETING}
+    ]
 
 # --- BƯỚC 4: Hiển thị Giao diện Streamlit ---
 
@@ -46,8 +56,7 @@ for msg in st.session_state.messages:
         st.chat_message("assistant").write(msg["text"])
 
 # Xử lý input của người dùng
-# DÒNG NÀY ĐÃ ĐƯỢC CẬP NHẬT VỚI GỢI Ý MỚI CỦA BẠN
-if prompt := st.chat_input("Bạn có câu hỏi nào về Toán, Lý, Hóa lớp 8 không?"):
+if prompt := st.chat_input("Bạn có câu hỏi nào về các môn học ở trường không?"):
     # 1. Thêm câu hỏi người dùng vào lịch sử hiển thị
     st.session_state.messages.append({"role": "user", "text": prompt})
     st.chat_message("user").write(prompt)
@@ -81,3 +90,8 @@ if prompt := st.chat_input("Bạn có câu hỏi nào về Toán, Lý, Hóa lớ
 if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
     st.session_state["messages"] = []
     st.rerun()
+
+
+---
+
+Tôi hy vọng lần này bạn sẽ thấy code. Chúc bạn thành công với việc triển khai!
