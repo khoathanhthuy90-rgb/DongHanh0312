@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 import os
 
 # --- BƯỚC 1: Tải Khóa API và Khởi tạo Client ---
-# Ghi chú: Sử dụng GEMINI_API_KEY
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -36,7 +35,7 @@ if "messages" not in st.session_state:
 
 # --- BƯỚC 4: Hiển thị Giao diện Streamlit ---
 
-st.title("🤖 Chatbot AI_Gia Sư Ảo")
+st.title("⭐️ Gia Sư Trực Tuyến Của Bạn") 
 st.caption("Đề tài Nghiên cứu Khoa học Kỹ thuật")
 
 # Hiển thị lịch sử trò chuyện
@@ -47,13 +46,13 @@ for msg in st.session_state.messages:
         st.chat_message("assistant").write(msg["text"])
 
 # Xử lý input của người dùng
-if prompt := st.chat_input("Hãy hỏi kiến thức mà bạn đang thắc mắc..."):
+# DÒNG NÀY ĐÃ ĐƯỢC CẬP NHẬT VỚI GỢI Ý MỚI CỦA BẠN
+if prompt := st.chat_input("Bạn có câu hỏi nào về Toán, Lý, Hóa lớp 8 không?"):
     # 1. Thêm câu hỏi người dùng vào lịch sử hiển thị
     st.session_state.messages.append({"role": "user", "text": prompt})
     st.chat_message("user").write(prompt)
 
     # 2. Chuẩn bị lịch sử chat cho Gemini API
-    # Chuyển đổi định dạng Streamlit sang định dạng Gemini
     gemini_history = [{"role": m["role"], "parts": [{"text": m["text"]}]} for m in st.session_state.messages]
     
     try:
@@ -82,4 +81,3 @@ if prompt := st.chat_input("Hãy hỏi kiến thức mà bạn đang thắc mắ
 if st.button("Bắt đầu Phiên Mới (Xóa lịch sử)"):
     st.session_state["messages"] = []
     st.rerun()
-
