@@ -37,8 +37,8 @@ def initialize_firebase():
                 json_string = st.secrets["firebase_service_account"]
                 
                 # PHÂN TÍCH CHUỖI JSON thành Python Dictionary
-                # Đây là bước sửa lỗi chính
-                parsed_json = json.loads(json_string)
+                # Sử dụng .strip() để loại bỏ các ký tự trắng thừa ở đầu/cuối chuỗi
+                parsed_json = json.loads(json_string.strip())
                 
                 # Khởi tạo Firebase bằng Dictionary đã được phân tích
                 cred = credentials.Certificate(parsed_json)
