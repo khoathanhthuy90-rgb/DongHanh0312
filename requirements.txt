@@ -55,5 +55,6 @@ typing_extensions==4.15.0
 tzdata 
 urllib3==2.5.0
 watchdog==6.0.0
+firebase-admin
 
 
