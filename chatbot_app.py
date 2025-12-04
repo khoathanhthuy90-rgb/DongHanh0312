@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 // --- CONFIG ---
 const GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025';
-const API_KEY = ""; // Đặt API key sau
+const API_KEY = ""; // ⚠️ Điền API KEY vào đây
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`;
 
-// Tạo UID ổn định mỗi lần load app
-const userId = 'GiaSu_' + crypto.randomUUID().slice(0, 8);
+// Tạo UID ổn định
+const userId = 'GiaSu_' + (window.crypto?.randomUUID?.().slice(0, 8) || "User1234");
 const appId = 'SAFE-MODE-APP';
 
 // Format giờ
@@ -18,11 +18,13 @@ const formatTime = (timestamp) => {
 
 // API Gemini
 const fetchGeminiResponse = async (prompt) => {
+  if (!API_KEY) return "⚠️ Lỗi: Bạn chưa nhập API KEY.";
+
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
     systemInstruction: {
       parts: [{ text: "Bạn là Gia sư ảo thân thiện, giải thích chậm rãi, dễ hiểu." }]
-    },
+    }
   };
 
   try {
@@ -84,7 +86,7 @@ export default function App() {
     if (!text || isTyping || !ready) return;
 
     const newMsg = {
-      id: crypto.randomUUID(),
+      id: window.crypto.randomUUID(),
       userId,
       message: text,
       timestamp: Date.now()
@@ -100,7 +102,7 @@ export default function App() {
     const reply = await fetchGeminiResponse(text);
 
     const aiMsg = {
-      id: crypto.randomUUID(),
+      id: window.crypto.randomUUID(),
       userId: 'AI-GiaSu',
       message: reply,
       timestamp: Date.now()
@@ -119,7 +121,9 @@ export default function App() {
 
         <div className="p-3 mb-4 rounded-lg border bg-green-100 border-green-400">
           <p className="text-sm font-bold text-green-700">[OK] Sẵn sàng sử dụng</p>
-          <p className="text-xs text-gray-600">UID: <span className="font-mono bg-gray-200 px-1 rounded">{userId}</span></p>
+          <p className="text-xs text-gray-600">
+            UID: <span className="font-mono bg-gray-200 px-1 rounded">{userId}</span>
+          </p>
         </div>
 
         <ActivityDashboard currentUserId={userId} />
