@@ -204,7 +204,7 @@ def show_login():
     with st.form("login_form"):
         # Yêu cầu tên và lớp học
         name = st.text_input("Họ và tên:", placeholder="Nguyễn Văn A")
-        class_name = st.text_input("Lớp học:", placeholder="10A1")
+        class_name = st.text_input("Lớp học:", placeholder="9A1")
         submit = st.form_submit_button("Bắt đầu")
 
         if submit:
@@ -265,3 +265,4 @@ if not st.session_state.logged_in:
     show_login()
 else:
     show_chat()
+
