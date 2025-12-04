@@ -6,14 +6,15 @@ import base64
 from io import BytesIO
 
 # ==========================
-#   CẤU HÌNH API GEMINI
+# ⚙️ CẤU HÌNH API GEMINI
 # ==========================
 # Sử dụng mô hình đa phương thức (multimodal) chuẩn
 GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025'
-# API_KEY phải được để trống để Canvas tự động cung cấp
-API_KEY = "" 
-# Dùng phương thức xác thực qua query parameter
-API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={API_KEY}"
+# API_KEY KHÔNG ĐƯỢC DÙNG (để trống)
+# API Key sẽ được môi trường Streamlit Cloud/Canvas tự động cung cấp qua Header xác thực.
+API_KEY = ""
+# LOẠI BỎ QUERY PARAMETER "?key={API_KEY}" để xác thực qua môi trường
+API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 SYSTEM_INSTRUCTION = (
     "Bạn là Gia sư ảo thân thiện và kiên nhẫn. Nhiệm vụ của bạn là giải đáp các câu hỏi "
@@ -24,7 +25,7 @@ SYSTEM_INSTRUCTION = (
 )
 
 # ==========================
-#   HÀM CHUYỂN ĐỔI HÌNH ẢNH SANG BASE64
+# 🖼️ HÀM CHUYỂN ĐỔI HÌNH ẢNH SANG BASE64
 # ==========================
 
 def get_base64_image(image_file):
@@ -36,36 +37,59 @@ def get_base64_image(image_file):
     return base64.b64encode(bytes_data).decode("utf-8")
 
 # ==========================
-#   HÀM GỌI API GEMINI (Hỗ trợ đa phương thức)
+# 🤖 HÀM GỌI API GEMINI (Hỗ trợ Đa phương thức và Lịch sử trò chuyện)
 # ==========================
 
 def get_gemini_response(prompt: str, image_data: str = None):
-    """Gọi API Gemini, hỗ trợ cả text và image."""
+    """Gọi API Gemini, hỗ trợ cả text và image, có nhớ lịch sử."""
     
-    # 1. Chuẩn bị nội dung (contents)
-    contents = []
-    
-    # Lấy file từ session state, vì nó đã được cập nhật bởi widget file_uploader
+    # Lấy thông tin file đã upload
     uploaded_file_info = st.session_state.uploaded_file
 
-    if image_data:
-        # Thêm phần hình ảnh
-        contents.append({
+    # --- 1. Xây dựng Lịch sử trò chuyện (Conversation History) ---
+    # Chuyển đổi toàn bộ lịch sử chat (trừ tin nhắn user hiện tại) sang định dạng API
+    history_contents = []
+    
+    # Lấy toàn bộ lịch sử (trừ tin nhắn cuối cùng là tin nhắn user hiện tại)
+    # Vì tin nhắn user hiện tại sẽ được xây dựng riêng (current_parts)
+    chat_history_for_api = st.session_state.chat_history[:-1]
+
+    for message in chat_history_for_api:
+        role = message["role"]
+        parts = []
+        
+        # Chỉ lấy phần nội dung text, bỏ qua việc re-encode lại hình ảnh cũ trong lịch sử để đơn giản hóa
+        if "content" in message:
+            parts.append({"text": message["content"]})
+             
+        if parts:
+            history_contents.append({"role": role, "parts": parts})
+
+    # --- 2. Chuẩn bị Nội dung tin nhắn hiện tại (User's current parts) ---
+    current_parts = []
+    
+    if image_data and uploaded_file_info:
+        # Thêm phần hình ảnh mới
+        current_parts.append({
             "inlineData": {
-                # Mime type của tệp tải lên
-                # Cần đảm bảo file info còn tồn tại để lấy type
+                # Đảm bảo sử dụng mimeType của tệp tải lên
                 "mimeType": uploaded_file_info.type if uploaded_file_info else "image/jpeg",
                 "data": image_data
             }
         })
     
-    # Thêm phần văn bản
-    contents.append({"text": prompt})
+    # Thêm phần văn bản mới
+    if prompt:
+        current_parts.append({"text": prompt})
 
-    # Xây dựng payload
+    # --- 3. Xây dựng Payload Cuối cùng ---
     payload = {
-        "contents": [{"parts": contents}],
-        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+        # Gộp lịch sử và tin nhắn user hiện tại
+        "contents": history_contents + [{"role": "user", "parts": current_parts}],
+        "config": {
+             # Truyền systemInstruction vào config (cách chuẩn)
+            "systemInstruction": SYSTEM_INSTRUCTION
+        }
     }
 
     max_retries = 3
@@ -102,7 +126,7 @@ def get_gemini_response(prompt: str, image_data: str = None):
     error_message = f"❌ Lỗi API nghiêm trọng: Không thể kết nối sau {max_retries} lần thử. Mã trạng thái cuối cùng: {last_code}"
     
     if last_code == 403 or last_code == 401:
-        st.error(f"{error_message}. **Đây là lỗi Xác thực (API Key).** Vui lòng tải lại Canvas để đảm bảo API Key được cung cấp chính xác.")
+        st.error(f"{error_message}. **Đây là lỗi Xác thực (API Key).** Vui lòng kiểm tra lại môi trường hoặc tải lại Canvas.")
     else:
         st.error(error_message)
         
@@ -110,7 +134,7 @@ def get_gemini_response(prompt: str, image_data: str = None):
 
 
 # ==========================
-#   QUẢN LÝ SESSION STATE
+# 💾 QUẢN LÝ SESSION STATE
 # ==========================
 
 if "logged_in" not in st.session_state:
@@ -126,7 +150,7 @@ if "uploaded_file" not in st.session_state:
     st.session_state.uploaded_file = None
 
 # ==========================
-#   ĐĂNG NHẬP
+# 🔑 ĐĂNG NHẬP
 # ==========================
 
 def handle_login(name, class_name):
@@ -146,7 +170,7 @@ def handle_login(name, class_name):
 
 
 # ==========================
-#   GỬI TIN NHẮN VÀ HÌNH ẢNH
+# 💬 GỬI TIN NHẮN VÀ HÌNH ẢNH
 # ==========================
 
 def submit_chat():
@@ -164,6 +188,7 @@ def submit_chat():
         try:
             # Lấy base64 từ file đã upload
             image_base64 = get_base64_image(uploaded_file)
+            # Lưu tin nhắn user (hình ảnh) vào lịch sử
             st.session_state.chat_history.append({"role": "user", "content": f"Hình ảnh đã tải lên ({uploaded_file.name})", "image": uploaded_file})
         except Exception as e:
             st.error(f"Lỗi xử lý hình ảnh: {e}")
@@ -171,10 +196,12 @@ def submit_chat():
     
     # 2. Xử lý văn bản
     if text:
+        # Lưu tin nhắn user (văn bản) vào lịch sử
         st.session_state.chat_history.append({"role": "user", "content": text})
 
     # 3. Gọi API
     if text or uploaded_file:
+        # Truyền cả text (hiện tại) và image_base64 (hiện tại) để gọi API, hàm sẽ tự xử lý lịch sử
         with st.spinner("⏳ Gia sư đang phân tích và suy nghĩ..."):
             reply = get_gemini_response(text, image_base64)
     
@@ -184,16 +211,17 @@ def submit_chat():
     st.session_state.user_input = ""
     # Reset file uploader bằng cách gán giá trị None vào key
     st.session_state["uploaded_file"] = None
+    # Rerun để đảm bảo giao diện được cập nhật
+    st.rerun()
 
 
 # ==========================
-#   GIAO DIỆN
+# 💻 GIAO DIỆN
 # ==========================
 
 st.set_page_config(page_title="Gia sư ảo của Bạn", layout="centered")
 
 st.title("👨‍🏫 Gia Sư Ảo của Bạn")
-# THÊM CỤM TỪ THEO YÊU CẦU NGAY DƯỚI TITLE
 st.subheader("ĐỀ TÀI NGHIÊN CỨU KHOA HỌC") 
 st.markdown("---")
 
@@ -238,7 +266,6 @@ def show_chat():
                     st.write(msg["content"])
     
     # Vùng nhập liệu và tải tệp
-    # DI CHUYỂN FILE UPLOADER LÊN TRÊN VÙNG CHAT INPUT
     st.file_uploader(
         "Tải lên hình ảnh bài tập (Tùy chọn):", 
         type=["png", "jpg", "jpeg"],
@@ -261,7 +288,6 @@ def show_chat():
 
         with col2:
             # NÚT GỬI TƯỜNG MINH
-            # Nút này sẽ kích hoạt khi form được submit (ấn Enter hoặc click nút)
             submit_button = st.form_submit_button(label='Gửi', type="primary")
 
         if submit_button:
@@ -270,7 +296,7 @@ def show_chat():
 
 
 # ==========================
-#   CHẠY ỨNG DỤNG
+# ▶️ CHẠY ỨNG DỤNG
 # ==========================
 
 if not st.session_state.logged_in:
