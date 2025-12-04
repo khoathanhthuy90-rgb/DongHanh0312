@@ -6,14 +6,13 @@ import base64
 from io import BytesIO
 
 # ==========================
-# ⚙️ CẤU HÌNH API GEMINI
+# ⚙️ CẤU HÌNH API GEMINI 
 # ==========================
 # Sử dụng mô hình đa phương thức (multimodal) chuẩn
 GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025'
-# API_KEY KHÔNG ĐƯỢC DÙNG (để trống)
 # API Key sẽ được môi trường Streamlit Cloud/Canvas tự động cung cấp qua Header xác thực.
 API_KEY = ""
-# LOẠI BỎ QUERY PARAMETER "?key={API_KEY}" để xác thực qua môi trường
+# SỬA LỖI API KEY 403: LOẠI BỎ QUERY PARAMETER "?key={API_KEY}"
 API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 SYSTEM_INSTRUCTION = (
@@ -43,22 +42,19 @@ def get_base64_image(image_file):
 def get_gemini_response(prompt: str, image_data: str = None):
     """Gọi API Gemini, hỗ trợ cả text và image, có nhớ lịch sử."""
     
-    # Lấy thông tin file đã upload
     uploaded_file_info = st.session_state.uploaded_file
 
-    # --- 1. Xây dựng Lịch sử trò chuyện (Conversation History) ---
-    # Chuyển đổi toàn bộ lịch sử chat (trừ tin nhắn user hiện tại) sang định dạng API
+    # --- 1. Xây dựng Lịch sử trò chuyện ---
     history_contents = []
     
     # Lấy toàn bộ lịch sử (trừ tin nhắn cuối cùng là tin nhắn user hiện tại)
-    # Vì tin nhắn user hiện tại sẽ được xây dựng riêng (current_parts)
     chat_history_for_api = st.session_state.chat_history[:-1]
 
     for message in chat_history_for_api:
         role = message["role"]
         parts = []
         
-        # Chỉ lấy phần nội dung text, bỏ qua việc re-encode lại hình ảnh cũ trong lịch sử để đơn giản hóa
+        # Chỉ lấy phần nội dung text trong lịch sử (để tránh phải re-encode hình ảnh cũ)
         if "content" in message:
             parts.append({"text": message["content"]})
              
@@ -72,7 +68,6 @@ def get_gemini_response(prompt: str, image_data: str = None):
         # Thêm phần hình ảnh mới
         current_parts.append({
             "inlineData": {
-                # Đảm bảo sử dụng mimeType của tệp tải lên
                 "mimeType": uploaded_file_info.type if uploaded_file_info else "image/jpeg",
                 "data": image_data
             }
@@ -84,10 +79,8 @@ def get_gemini_response(prompt: str, image_data: str = None):
 
     # --- 3. Xây dựng Payload Cuối cùng ---
     payload = {
-        # Gộp lịch sử và tin nhắn user hiện tại
         "contents": history_contents + [{"role": "user", "parts": current_parts}],
         "config": {
-             # Truyền systemInstruction vào config (cách chuẩn)
             "systemInstruction": SYSTEM_INSTRUCTION
         }
     }
@@ -114,12 +107,10 @@ def get_gemini_response(prompt: str, image_data: str = None):
                 return text
 
             last_code = res.status_code
-            # Log lỗi và đợi trước khi thử lại
             st.warning(f"Thử lại lần {attempt + 1}/{max_retries} thất bại. Mã trạng thái: {last_code}")
             time.sleep(1.5 * (attempt + 1))
 
         except Exception as e:
-            # Xử lý lỗi kết nối ngoài HTTP
             return f"❌ Lỗi kết nối API: {e}"
 
     # Xử lý lỗi sau khi hết lần thử
@@ -170,7 +161,7 @@ def handle_login(name, class_name):
 
 
 # ==========================
-# 💬 GỬI TIN NHẮN VÀ HÌNH ẢNH
+# 💬 GỬI TIN NHẮN VÀ HÌNH ẢNH (ĐÃ KHẮC PHỤC LỖI STREAMLITAPIEXCEPTION)
 # ==========================
 
 def submit_chat():
@@ -186,9 +177,7 @@ def submit_chat():
     # 1. Xử lý hình ảnh nếu có
     if uploaded_file:
         try:
-            # Lấy base64 từ file đã upload
             image_base64 = get_base64_image(uploaded_file)
-            # Lưu tin nhắn user (hình ảnh) vào lịch sử
             st.session_state.chat_history.append({"role": "user", "content": f"Hình ảnh đã tải lên ({uploaded_file.name})", "image": uploaded_file})
         except Exception as e:
             st.error(f"Lỗi xử lý hình ảnh: {e}")
@@ -196,22 +185,21 @@ def submit_chat():
     
     # 2. Xử lý văn bản
     if text:
-        # Lưu tin nhắn user (văn bản) vào lịch sử
         st.session_state.chat_history.append({"role": "user", "content": text})
 
     # 3. Gọi API
     if text or uploaded_file:
-        # Truyền cả text (hiện tại) và image_base64 (hiện tại) để gọi API, hàm sẽ tự xử lý lịch sử
         with st.spinner("⏳ Gia sư đang phân tích và suy nghĩ..."):
             reply = get_gemini_response(text, image_base64)
     
         st.session_state.chat_history.append({"role": "assistant", "content": reply})
 
     # 4. Dọn dẹp
-    st.session_state.user_input = ""
-    # Reset file uploader bằng cách gán giá trị None vào key
+    # LỖI ĐÃ KHẮC PHỤC: Xóa dòng st.session_state.user_input = "" vì form có clear_on_submit=True
+    
+    # Reset file uploader (Cần thiết vì nó nằm ngoài form)
     st.session_state["uploaded_file"] = None
-    # Rerun để đảm bảo giao diện được cập nhật
+    
     st.rerun()
 
 
@@ -231,7 +219,6 @@ def show_login():
     st.subheader("Đăng nhập để bắt đầu học")
 
     with st.form("login_form"):
-        # Yêu cầu tên và lớp học
         name = st.text_input("Họ và tên:", placeholder="Nguyễn Văn A")
         class_name = st.text_input("Lớp học:", placeholder="9/1")
         submit = st.form_submit_button("Bắt đầu")
@@ -259,13 +246,11 @@ def show_chat():
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
                 if "image" in msg:
-                    # Hiển thị hình ảnh đã tải lên
                     st.image(msg["image"], caption=msg["content"], width=200)
                 else:
-                    # Streamlit tự động render LaTeX/MathJax từ Markdown
                     st.write(msg["content"])
     
-    # Vùng nhập liệu và tải tệp
+    # Vùng nhập liệu và tải tệp (File uploader nằm ngoài form)
     st.file_uploader(
         "Tải lên hình ảnh bài tập (Tùy chọn):", 
         type=["png", "jpg", "jpeg"],
@@ -273,25 +258,22 @@ def show_chat():
         accept_multiple_files=False
     )
     
-    # Sử dụng form để nhóm input và button gửi
-    with st.form(key='chat_form', clear_on_submit=True):
+    # Vùng Form nhập liệu
+    with st.form(key='chat_form', clear_on_submit=True): # clear_on_submit=True là key để tránh lỗi APIException
         col1, col2 = st.columns([5, 1])
         
         with col1:
-            # Ô nhập tin nhắn (Sử dụng key để có thể reset)
             st.text_input(
                 "Nhập câu hỏi của bạn:", 
                 key="user_input", 
                 placeholder="Ví dụ: Tính đạo hàm của hàm số $y=x^2$ hoặc giải thích hiện tượng quang điện.",
-                label_visibility="collapsed" # Ẩn label để giao diện gọn hơn
+                label_visibility="collapsed"
             )
 
         with col2:
-            # NÚT GỬI TƯỜNG MINH
             submit_button = st.form_submit_button(label='Gửi', type="primary")
 
         if submit_button:
-            # Gọi hàm submit_chat khi form được submit
             submit_chat()
 
 
@@ -303,5 +285,3 @@ if not st.session_state.logged_in:
     show_login()
 else:
     show_chat()
-
-
