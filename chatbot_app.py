@@ -5,6 +5,8 @@ import os
 import re
 import uuid
 import datetime
+# Cần thêm thư viện json để phân tích chuỗi JSON từ Secrets
+import json 
 
 # Thư viện Firebase Admin SDK (Cần cài đặt: pip install firebase-admin)
 import firebase_admin
@@ -24,14 +26,22 @@ except Exception as e:
     st.error(f"Lỗi khởi tạo Gemini Client: {e}")
     st.stop()
 
-# --- BƯỚC 1b: Khởi tạo Firebase ---
+# --- BƯỚC 1b: Khởi tạo Firebase (ĐÃ SỬA LỖI JSON) ---
 # NOTE: Cần Service Account Key từ Firebase được lưu trong st.secrets
 def initialize_firebase():
     if not firebase_admin._apps:
         try:
             # Tải khóa dịch vụ từ Streamlit Secrets
             if 'firebase_service_account' in st.secrets:
-                cred = credentials.Certificate(st.secrets["firebase_service_account"])
+                # Lấy chuỗi JSON thô từ Secrets
+                json_string = st.secrets["firebase_service_account"]
+                
+                # PHÂN TÍCH CHUỖI JSON thành Python Dictionary
+                # Đây là bước sửa lỗi chính
+                parsed_json = json.loads(json_string)
+                
+                # Khởi tạo Firebase bằng Dictionary đã được phân tích
+                cred = credentials.Certificate(parsed_json)
                 firebase_admin.initialize_app(cred)
                 st.session_state['db'] = firestore.client()
             else:
