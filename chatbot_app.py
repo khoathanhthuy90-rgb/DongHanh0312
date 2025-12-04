@@ -2,34 +2,65 @@ import streamlit as st
 import requests
 import time
 import json
+import base64
+from io import BytesIO
 
 # ==========================
-#   CẤU HÌNH API GEMINI (ĐÃ ĐƯỢC SỬA ĐỂ PHÙ HỢP VỚI MÔI TRƯỜNG CANVAS)
+#   CẤU HÌNH API GEMINI
 # ==========================
-# SỬ DỤNG MÔ HÌNH VÀ CÁCH XÁC THỰC CHUẨN TRONG MÔI TRƯỜNG NÀY
+# Sử dụng mô hình đa phương thức (multimodal) chuẩn
 GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025'
-
-# API_KEY phải được để trống (như thế này: "") để Canvas tự động cung cấp trong runtime
+# API_KEY phải được để trống để Canvas tự động cung cấp
 API_KEY = "" 
-
-# Dùng API Key qua query parameter (?key=...)
+# Dùng phương thức xác thực qua query parameter
 API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={API_KEY}"
 
 SYSTEM_INSTRUCTION = (
-    "Bạn là Gia sư ảo thân thiện và kiên nhẫn. "
-    "Nhiệm vụ của bạn là giải đáp các câu hỏi về Toán, Lý, Hóa cho học sinh cấp 2 và cấp 3. "
-    "Hãy đưa ra câu trả lời chi tiết, dễ hiểu và khuyến khích học sinh đặt thêm câu hỏi."
+    "Bạn là Gia sư ảo thân thiện và kiên nhẫn. Nhiệm vụ của bạn là giải đáp các câu hỏi "
+    "về Toán, Lý, Hóa cho học sinh cấp 2 và cấp 3. Hãy: "
+    "1. Đưa ra câu trả lời chi tiết, dễ hiểu, sử dụng **LaTeX** cho tất cả công thức toán học và phương trình hóa học. "
+    "2. Nếu có hình ảnh, hãy phân tích hình ảnh trước khi trả lời. "
+    "3. Giữ giọng điệu chuyên nghiệp nhưng khuyến khích học sinh đặt thêm câu hỏi."
 )
 
 # ==========================
-#   HÀM GỌI API GEMINI
+#   HÀM CHUYỂN ĐỔI HÌNH ẢNH SANG BASE64
 # ==========================
 
-def get_gemini_response(prompt: str):
-    # Cấu trúc payload đúng cho generateContent khi dùng system instruction
+def get_base64_image(image_file):
+    """Chuyển đổi tệp hình ảnh đã tải lên thành chuỗi base64."""
+    if image_file is None:
+        return None
+        
+    bytes_data = image_file.getvalue()
+    return base64.b64encode(bytes_data).decode("utf-8")
+
+# ==========================
+#   HÀM GỌI API GEMINI (Hỗ trợ đa phương thức)
+# ==========================
+
+def get_gemini_response(prompt: str, image_data: str = None):
+    """Gọi API Gemini, hỗ trợ cả text và image."""
+    
+    # 1. Chuẩn bị nội dung (contents)
+    contents = []
+    
+    if image_data:
+        # Thêm phần hình ảnh
+        contents.append({
+            "inlineData": {
+                # Mime type của tệp tải lên (chúng ta giả định là image/png hoặc image/jpeg)
+                "mimeType": st.session_state.uploaded_file.type,
+                "data": image_data
+            }
+        })
+    
+    # Thêm phần văn bản
+    contents.append({"text": prompt})
+
+    # Xây dựng payload
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        # systemInstruction phải là thuộc tính cấp cao nhất
+        "contents": [{"parts": contents}],
         "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
     }
 
@@ -38,10 +69,8 @@ def get_gemini_response(prompt: str):
 
     for attempt in range(max_retries):
         try:
-            # Gửi yêu cầu POST, headers chỉ cần Content-Type
             res = requests.post(
                 API_URL, 
-                # Không cần header "Authorization"
                 headers={'Content-Type': 'application/json'}, 
                 data=json.dumps(payload)
             )
@@ -57,11 +86,13 @@ def get_gemini_response(prompt: str):
                 return text
 
             last_code = res.status_code
+            # Log lỗi và đợi trước khi thử lại
             st.warning(f"Thử lại lần {attempt + 1}/{max_retries} thất bại. Mã trạng thái: {last_code}")
             time.sleep(1.5 * (attempt + 1))
 
         except Exception as e:
-            return f"❌ Lỗi kết nối API không xác định: {e}"
+            # Xử lý lỗi kết nối ngoài HTTP
+            return f"❌ Lỗi kết nối API: {e}"
 
     # Xử lý lỗi sau khi hết lần thử
     error_message = f"❌ Lỗi API nghiêm trọng: Không thể kết nối sau {max_retries} lần thử. Mã trạng thái cuối cùng: {last_code}"
@@ -87,11 +118,15 @@ if "user_info" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+if "uploaded_file" not in st.session_state:
+    st.session_state.uploaded_file = None
+
 # ==========================
 #   ĐĂNG NHẬP
 # ==========================
 
 def handle_login(name, class_name):
+    """Xử lý đăng nhập, chỉ cần tên và lớp."""
     if not name or not class_name:
         st.error("⚠️ Vui lòng nhập đầy đủ thông tin.")
         return
@@ -100,39 +135,59 @@ def handle_login(name, class_name):
     st.session_state.logged_in = True
 
     st.session_state.chat_history = [
-        {"role": "assistant", "content": f"Chào {name} (Lớp {class_name}) 👋. Bạn muốn hỏi gì về Toán – Lý – Hóa?"}
+        {"role": "assistant", "content": f"Chào bạn, **{name} (Lớp {class_name})**! Tôi là Gia sư ảo của bạn. Bạn có thể gửi câu hỏi về Toán, Lý, Hóa (cả văn bản và hình ảnh) cho tôi."}
     ]
 
     st.rerun()
 
 
 # ==========================
-#   GỬI TIN NHẮN
+#   GỬI TIN NHẮN VÀ HÌNH ẢNH
 # ==========================
 
 def submit_chat():
     text = st.session_state.user_input.strip()
-    if not text:
+    uploaded_file = st.session_state.uploaded_file
+
+    if not text and not uploaded_file:
         return
 
-    st.session_state.chat_history.append({"role": "user", "content": text})
+    image_base64 = None
+    
+    # 1. Xử lý hình ảnh nếu có
+    if uploaded_file:
+        try:
+            image_base64 = get_base64_image(uploaded_file)
+            st.session_state.chat_history.append({"role": "user", "content": f"Hình ảnh đã tải lên ({uploaded_file.name})", "image": uploaded_file})
+        except Exception as e:
+            st.error(f"Lỗi xử lý hình ảnh: {e}")
+            return
+    
+    # 2. Xử lý văn bản
+    if text:
+        st.session_state.chat_history.append({"role": "user", "content": text})
 
-    with st.spinner("⏳ Gia sư đang suy nghĩ..."):
-        # Lỗi 403/401 sẽ xuất hiện ở đây nếu API Key bị lỗi
-        reply = get_gemini_response(text)
+    # 3. Gọi API
+    if text or uploaded_file:
+        with st.spinner("⏳ Gia sư đang phân tích và suy nghĩ..."):
+            reply = get_gemini_response(text, image_base64)
+    
+        st.session_state.chat_history.append({"role": "assistant", "content": reply})
 
-    st.session_state.chat_history.append({"role": "assistant", "content": reply})
-
+    # 4. Dọn dẹp
     st.session_state.user_input = ""
+    st.session_state.uploaded_file = None # Xóa file đã tải lên sau khi gửi
 
 
 # ==========================
 #   GIAO DIỆN
 # ==========================
 
-st.set_page_config(page_title="Gia sư ảo", layout="centered")
+st.set_page_config(page_title="Gia sư ảo của Bạn", layout="centered")
 
-st.title("👨‍🏫 Gia Sư Ảo Thông Minh")
+st.title("👨‍🏫 Gia Sư Ảo của Bạn")
+# THÊM CỤM TỪ THEO YÊU CẦU NGAY DƯỚI TITLE
+st.subheader("ĐỀ TÀI NGHIÊN CỨU KHOA HỌC") 
 st.markdown("---")
 
 
@@ -141,8 +196,9 @@ def show_login():
     st.subheader("Đăng nhập để bắt đầu học")
 
     with st.form("login_form"):
-        name = st.text_input("Họ và tên:")
-        class_name = st.text_input("Lớp học:")
+        # Yêu cầu tên và lớp học
+        name = st.text_input("Họ và tên:", placeholder="Nguyễn Văn A")
+        class_name = st.text_input("Lớp học:", placeholder="10A1")
         submit = st.form_submit_button("Bắt đầu")
 
         if submit:
@@ -155,19 +211,44 @@ def show_chat():
     st.subheader(f"Xin chào, {user['name']} (Lớp {user['class']})")
     st.markdown("---")
 
-    if st.button("Đăng xuất"):
-        st.session_state.logged_in = False
-        st.session_state.chat_history = []
-        st.rerun()
+    col_btn1, col_btn2 = st.columns([1, 6])
+    with col_btn1:
+        if st.button("Đăng xuất", type="primary"):
+            st.session_state.logged_in = False
+            st.session_state.chat_history = []
+            st.rerun()
 
-    # Lịch sử chat
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+    # Khu vực lịch sử chat
+    chat_container = st.container(height=400, border=True)
+    with chat_container:
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                if "image" in msg:
+                    # Hiển thị hình ảnh đã tải lên
+                    st.image(msg["image"], caption=msg["content"], width=200)
+                else:
+                    # Streamlit tự động render LaTeX/MathJax từ Markdown
+                    st.write(msg["content"])
+    
+    # Vùng nhập liệu và tải tệp
+    input_container = st.container()
+    with input_container:
+        
+        # File uploader để tải hình ảnh (sử dụng key 'uploaded_file')
+        st.file_uploader(
+            "Tải lên hình ảnh bài tập (Tùy chọn):", 
+            type=["png", "jpg", "jpeg"],
+            key="uploaded_file", 
+            accept_multiple_files=False
+        )
 
-    # Ô nhập + nút gửi
-    # Sử dụng on_change để submit_chat được gọi khi bấm Enter hoặc focus ra khỏi ô input
-    st.text_input("Nhập tin nhắn...", key="user_input", on_change=submit_chat, placeholder="Hỏi Gia sư về Toán, Lý, Hóa...")
+        # Ô nhập tin nhắn
+        st.text_input(
+            "Nhập câu hỏi của bạn:", 
+            key="user_input", 
+            on_change=submit_chat,
+            placeholder="Ví dụ: Tính đạo hàm của hàm số $y=x^2$ hoặc giải thích hiện tượng quang điện."
+        )
 
 
 # ==========================
