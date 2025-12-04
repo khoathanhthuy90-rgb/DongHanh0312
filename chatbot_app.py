@@ -9,7 +9,7 @@ import json
 
 GEMINI_MODEL = "gemini-1.5-flash"
 
-API_KEY = st.secrets.get("API_KEY", None)
+API_KEY = st.secrets.get("AIzaSyAoEtvqlW9V4pkYR1fQ0mfRhD-jWR4fNb8", None)
 
 if not API_KEY:
     st.error("❌ Thiếu API_KEY trong secrets! Vui lòng thêm API_KEY vào .streamlit/secrets.toml")
@@ -165,3 +165,4 @@ if not st.session_state.logged_in:
     show_login()
 else:
     show_chat()
+
