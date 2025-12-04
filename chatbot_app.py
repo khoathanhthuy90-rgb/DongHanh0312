@@ -2,9 +2,15 @@ import streamlit as st
 from google import genai
 from dotenv import load_dotenv
 import os
-import re # Cần thiết để tìm và xử lý các thẻ hình ảnh 
+import re
+import uuid
+import datetime
 
-# --- BƯỚC 1: Tải Khóa API và Khởi tạo Client ---
+# Thư viện Firebase Admin SDK (Cần cài đặt: pip install firebase-admin)
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+# --- BƯỚC 1: Tải Khóa API và Khởi tạo Client Gemini ---
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -18,14 +24,84 @@ except Exception as e:
     st.error(f"Lỗi khởi tạo Gemini Client: {e}")
     st.stop()
 
+# --- BƯỚC 1b: Khởi tạo Firebase ---
+# NOTE: Cần Service Account Key từ Firebase được lưu trong st.secrets
+def initialize_firebase():
+    if not firebase_admin._apps:
+        try:
+            # Tải khóa dịch vụ từ Streamlit Secrets
+            if 'firebase_service_account' in st.secrets:
+                cred = credentials.Certificate(st.secrets["firebase_service_account"])
+                firebase_admin.initialize_app(cred)
+                st.session_state['db'] = firestore.client()
+            else:
+                # Nếu không tìm thấy Secrets, tính năng DB sẽ bị vô hiệu hóa
+                st.warning("Cảnh báo: Không tìm thấy khóa dịch vụ Firebase trong Secrets. Tính năng theo dõi sẽ bị tắt.")
+                st.session_state['db'] = None
+        except Exception as e:
+            st.error(f"Lỗi khởi tạo Firebase: {e}")
+            st.session_state['db'] = None
+    elif 'db' not in st.session_state:
+         st.session_state['db'] = firestore.client()
+
+initialize_firebase()
+db = st.session_state['db']
+
+# Lấy ID ứng dụng (Dùng cho cấu trúc lưu trữ Firebase)
+APP_ID = os.environ.get('CANVAS_APP_ID', 'gia-su-ao-lop-8-default')
+
+# --- Hàm lấy ID phiên (Nhận dạng học sinh ẩn danh/Theo dõi) ---
+def get_session_user_id():
+    """Gán một ID UUID duy nhất cho phiên hiện tại của trình duyệt."""
+    if 'session_user_id' not in st.session_state:
+        # Sử dụng uuid4 để tạo ID duy nhất cho phiên
+        st.session_state['session_user_id'] = str(uuid.uuid4())
+    return st.session_state['session_user_id']
+
+USER_ID = get_session_user_id()
+
+# --- Hàm ghi nhật ký sử dụng vào Firestore ---
+def log_usage(user_id, app_id, prompt_text):
+    """Ghi lại một sự kiện tương tác của người dùng vào Firestore."""
+    if db is None:
+        return
+    
+    # Lưu vào collection public để dễ dàng truy vấn theo quy tắc Canvas
+    collection_path = f"artifacts/{app_id}/public/data/usage_logs"
+    
+    try:
+        db.collection(collection_path).add({
+            "user_id": user_id,
+            "timestamp": datetime.datetime.now(),
+            "prompt": prompt_text[:200], # Chỉ lưu 200 ký tự đầu của câu hỏi
+            "app_id": app_id,
+            "session_id": st.session_state['session_user_id']
+        })
+    except Exception as e:
+        print(f"Lỗi khi ghi nhật ký Firestore: {e}")
+
+# --- Hàm lấy tổng số lần sử dụng ---
+def get_usage_count(app_id):
+    """Đếm tổng số tương tác đã được ghi lại."""
+    if db is None:
+        return "N/A (Chưa kết nối DB)"
+    try:
+        collection_path = f"artifacts/{app_id}/public/data/usage_logs"
+        docs = db.collection(collection_path).stream()
+        count = sum(1 for doc in docs)
+        return count
+    except Exception as e:
+        print(f"Lỗi khi lấy số liệu sử dụng: {e}")
+        return "Lỗi truy cập DB"
+
 
 # --- BƯỚC 2: Thiết lập Vai trò Sư phạm (System Prompt) ---
 SYSTEM_PROMPT = """
 Bạn là Gia sư ảo chuyên nghiệp, tận tâm, thân thiện và kiên nhẫn. 
-Bạn chỉ hướng dẫn và hỗ trợ kiến thức trong phạm vi các môn theo chương trình học hiện hành của Bộ GD&ĐT Việt Nam (Chương trình Giáo dục Phổ thông 2018).
+Bạn chỉ hướng dẫn và hỗ trợ kiến thức trong phạm vi Toán, Vật lý, Hóa học Lớp 8 theo chương trình học hiện hành của Bộ GD&ĐT Việt Nam (Chương trình Giáo dục Phổ thông 2018).
 QUY TẮC MINH HỌA: 
 1. Khi giải thích các khái niệm, quy trình, hoặc công thức, hãy sử dụng các Biểu đồ, Bảng biểu Markdown, công thức toán học (LaTeX), hoặc liệt kê có cấu trúc để minh họa.
-2. NẾU cần hình ảnh trực quan (như sơ đồ thí nghiệm, mô hình phân tử, hình học phức tạp, hình ảnh thực tế) để truyền đạt kiến thức, HÃY chèn tag .
+2. NẾU cần hình ảnh trực quan (như sơ đồ thí nghiệm, mô hình phân tử, hình học phức tạp) để truyền đạt kiến thức, HÃY chèn tag .
    Ví dụ:  hoặc .
 QUY TẮC VÀNG: Tuyệt đối KHÔNG cung cấp đáp án cuối cùng cho bài tập ngay lập tức. Thay vào đó, bạn phải hướng dẫn học sinh từng bước, đưa ra gợi ý, công thức, hoặc hỏi ngược lại để xác định lỗ hổng kiến thức.
 Luôn dùng giọng điệu khuyến khích, tích cực, phù hợp với học sinh 13-14 tuổi.
@@ -34,30 +110,22 @@ Luôn dùng giọng điệu khuyến khích, tích cực, phù hợp với học
 # --- BƯỚC 3: Quản lý Phiên (Session Management) ---
 
 MODEL_NAME = "gemini-2.5-flash"
-
-# LỜI CHÀO BAN ĐẦU ĐÃ CẬP NHẬT
 INITIAL_GREETING = "Chào bạn! Rất vui được gặp bạn ở đây. Mình là gia sư ảo của bạn, sẵn sàng hỗ trợ bạn học tập."
 
 if "messages" not in st.session_state:
-    # Sử dụng lời chào mới
     st.session_state["messages"] = [
         {"role": "model", "text": INITIAL_GREETING}
     ]
 
 # --- Hàm xử lý Phản hồi AI để tìm kiếm và hiển thị hình ảnh (giả) ---
 def process_and_display_response(container, response_text):
-    # Regex để tìm kiếm tất cả các tag 
+    # Tìm kiếm các thẻ hình ảnh
     image_tags = re.findall(r'\[Image of\s*([^\]]+)\]', response_text)
-    
-    # Loại bỏ các tag  khỏi văn bản để hiển thị phần nội dung chính
+    # Loại bỏ các thẻ hình ảnh khỏi nội dung văn bản chính
     cleaned_text = re.sub(r'\[Image of\s*[^\]]+\]', '', response_text).strip()
 
-    # 1. Hiển thị phần nội dung văn bản chính
     container.write(cleaned_text)
 
-    # 2. Xử lý và hiển thị hình ảnh (giả)
-    # Vì ứng dụng Streamlit không thể tự gọi API tạo hình ảnh (như Imagen), 
-    # chúng ta sẽ hiển thị một placeholder (hộp thông báo) thay thế.
     if image_tags:
         container.markdown("---")
         container.subheader("Hình Minh Họa (Phần bổ sung)")
@@ -72,8 +140,17 @@ def process_and_display_response(container, response_text):
 
 # --- BƯỚC 4: Hiển thị Giao diện Streamlit ---
 
-st.title("⭐️ Gia Sư Trực Tuyến Của Bạn") 
+st.title("⭐️ Gia Sư Trực Tuyến Của Tôi") 
 st.caption("Đề tài Nghiên cứu Khoa học Kỹ thuật")
+
+# Hiển thị thông tin theo dõi trong sidebar
+total_logs = get_usage_count(APP_ID)
+st.sidebar.header("Thông tin Theo dõi")
+st.sidebar.markdown(f"**Mã Session (Học sinh):** `{USER_ID}`")
+st.sidebar.markdown(f"**Tổng số lần tương tác:** `{total_logs}`")
+st.sidebar.markdown("---")
+st.sidebar.markdown("Kiểm tra **Firebase Console** để xem chi tiết nhật ký sử dụng tại collection `usage_logs`.")
+
 
 # Hiển thị lịch sử trò chuyện (ĐÃ CẬP NHẬT SỬ DỤNG HÀM XỬ LÝ HÌNH ẢNH)
 for msg in st.session_state.messages:
@@ -85,37 +162,34 @@ for msg in st.session_state.messages:
 
 
 # Xử lý input của người dùng
-if prompt := st.chat_input("Bạn có câu hỏi nào về kiến thức ở trường không?"):
-    # 1. Thêm câu hỏi người dùng vào lịch sử hiển thị
+if prompt := st.chat_input("Bạn có câu hỏi nào về Toán, Lý, Hóa lớp 8 không?"):
     st.session_state.messages.append({"role": "user", "text": prompt})
     st.chat_message("user").write(prompt)
 
-    # 2. Chuẩn bị lịch sử chat cho Gemini API
     gemini_history = [{"role": m["role"], "parts": [{"text": m["text"]}]} for m in st.session_state.messages]
     
     try:
         with st.spinner("Gia sư đang suy nghĩ..."):
-            # 3. Gọi API để nhận phản hồi từ Chatbot
             response = client.models.generate_content(
                 model=MODEL_NAME,
                 contents=gemini_history,
-                config={
-                    "system_instruction": SYSTEM_PROMPT 
-                }
+                config={"system_instruction": SYSTEM_PROMPT}
             )
         
-        # 4. Lấy phản hồi từ Gemini
         assistant_response = response.text
         
-        # 5. Lưu phản hồi của AI
+        # 5. Lưu phản hồi của AI và ghi nhật ký sử dụng
         st.session_state.messages.append({"role": "model", "text": assistant_response})
+        log_usage(USER_ID, APP_ID, prompt) # GHI NHẬT KÝ VÀO FIRESTORE
         
-        # Hiển thị phản hồi mới nhất (ĐÃ CẬP NHẬT SỬ DỤNG HÀM XỬ LÝ HÌNH ẢNH)
+        # Hiển thị phản hồi mới nhất
         with st.chat_message("assistant"):
              process_and_display_response(st.container(), assistant_response)
+             
+        # Tự động reload để cập nhật số liệu trong sidebar
+        st.experimental_rerun()
             
     except Exception as e:
-        # Khối except bắt lỗi và hiển thị
         st.error(f"Lỗi kết nối AI: {e}. Vui lòng kiểm tra Khóa API và trạng thái tài khoản Gemini.")
 
 # --- Nút Xóa Lịch sử ---
