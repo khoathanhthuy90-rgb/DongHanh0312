@@ -4,27 +4,21 @@ import time
 import json
 
 # ==========================
-#   CẤU HÌNH API GEMINI
+#   CẤU HÌNH API GEMINI (ĐÃ ĐƯỢC SỬA ĐỂ PHÙ HỢP VỚI MÔI TRƯỜNG CANVAS)
 # ==========================
+# SỬ DỤNG MÔ HÌNH VÀ CÁCH XÁC THỰC CHUẨN TRONG MÔI TRƯỜNG NÀY
+GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025'
 
-GEMINI_MODEL = "gemini-1.5-flash"
+# API_KEY phải được để trống (như thế này: "") để Canvas tự động cung cấp trong runtime
+API_KEY = "" 
 
-API_KEY = st.secrets.get("AIzaSyAoEtvqlW9V4pkYR1fQ0mfRhD-jWR4fNb8", None)
-
-if not API_KEY:
-    st.error("❌ Thiếu API_KEY trong secrets! Vui lòng thêm API_KEY vào .streamlit/secrets.toml")
-    st.stop()
-
-API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-
-HEADERS = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {API_KEY}",
-}
+# Dùng API Key qua query parameter (?key=...)
+API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={API_KEY}"
 
 SYSTEM_INSTRUCTION = (
     "Bạn là Gia sư ảo thân thiện và kiên nhẫn. "
-    "Hãy giải thích kiến thức các môn học thật dễ hiểu cho học sinh cấp 2 và cấp 3."
+    "Nhiệm vụ của bạn là giải đáp các câu hỏi về Toán, Lý, Hóa cho học sinh cấp 2 và cấp 3. "
+    "Hãy đưa ra câu trả lời chi tiết, dễ hiểu và khuyến khích học sinh đặt thêm câu hỏi."
 )
 
 # ==========================
@@ -32,11 +26,11 @@ SYSTEM_INSTRUCTION = (
 # ==========================
 
 def get_gemini_response(prompt: str):
+    # Cấu trúc payload đúng cho generateContent khi dùng system instruction
     payload = {
-        "system_instruction": {"role": "system", "parts": [{"text": SYSTEM_INSTRUCTION}]},
-        "contents": [
-            {"role": "user", "parts": [{"text": prompt}]}
-        ]
+        "contents": [{"parts": [{"text": prompt}]}],
+        # systemInstruction phải là thuộc tính cấp cao nhất
+        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
     }
 
     max_retries = 3
@@ -44,24 +38,41 @@ def get_gemini_response(prompt: str):
 
     for attempt in range(max_retries):
         try:
-            res = requests.post(API_URL, headers=HEADERS, data=json.dumps(payload))
+            # Gửi yêu cầu POST, headers chỉ cần Content-Type
+            res = requests.post(
+                API_URL, 
+                # Không cần header "Authorization"
+                headers={'Content-Type': 'application/json'}, 
+                data=json.dumps(payload)
+            )
 
             if res.status_code == 200:
                 data = res.json()
-                return (
+                text = (
                     data.get("candidates", [{}])[0]
                     .get("content", {})
                     .get("parts", [{}])[0]
                     .get("text", "Xin lỗi, tôi không tìm thấy câu trả lời.")
                 )
+                return text
 
             last_code = res.status_code
+            st.warning(f"Thử lại lần {attempt + 1}/{max_retries} thất bại. Mã trạng thái: {last_code}")
             time.sleep(1.5 * (attempt + 1))
 
         except Exception as e:
-            return f"❌ Lỗi kết nối API: {e}"
+            return f"❌ Lỗi kết nối API không xác định: {e}"
 
-    return f"❌ Lỗi API (mã {last_code}). Vui lòng thử lại sau."
+    # Xử lý lỗi sau khi hết lần thử
+    error_message = f"❌ Lỗi API nghiêm trọng: Không thể kết nối sau {max_retries} lần thử. Mã trạng thái cuối cùng: {last_code}"
+    
+    if last_code == 403 or last_code == 401:
+        st.error(f"{error_message}. **Đây là lỗi Xác thực (API Key).** Vui lòng tải lại Canvas để đảm bảo API Key được cung cấp chính xác.")
+    else:
+        st.error(error_message)
+        
+    return "Xin lỗi, tôi đang gặp lỗi kết nối API sau nhiều lần thử. Vui lòng thử lại sau."
+
 
 # ==========================
 #   QUẢN LÝ SESSION STATE
@@ -107,6 +118,7 @@ def submit_chat():
     st.session_state.chat_history.append({"role": "user", "content": text})
 
     with st.spinner("⏳ Gia sư đang suy nghĩ..."):
+        # Lỗi 403/401 sẽ xuất hiện ở đây nếu API Key bị lỗi
         reply = get_gemini_response(text)
 
     st.session_state.chat_history.append({"role": "assistant", "content": reply})
@@ -154,7 +166,8 @@ def show_chat():
             st.write(msg["content"])
 
     # Ô nhập + nút gửi
-    st.text_input("Nhập tin nhắn...", key="user_input", on_change=submit_chat)
+    # Sử dụng on_change để submit_chat được gọi khi bấm Enter hoặc focus ra khỏi ô input
+    st.text_input("Nhập tin nhắn...", key="user_input", on_change=submit_chat, placeholder="Hỏi Gia sư về Toán, Lý, Hóa...")
 
 
 # ==========================
@@ -165,4 +178,3 @@ if not st.session_state.logged_in:
     show_login()
 else:
     show_chat()
-
