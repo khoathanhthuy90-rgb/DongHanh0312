@@ -140,19 +140,13 @@ def show_login_form():
 
 # Hàm hiển thị giao diện Chat
 def show_chat_interface():
-    """Hiển thị giao diện chat và dashboard người dùng."""
+    """Hiển thị giao diện chat và dashboard người dùng, tập trung vào tương tác AI."""
     
     user_data = st.session_state.user_info
     
-    # Hiển thị Dashboard người dùng
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        st.image("https://placehold.co/100x100/10B981/ffffff?text=AI+Tutor", width=80)
-    with col2:
-        st.subheader(f"Xin chào, {user_data['name']}!")
-        st.markdown(f"**Lớp:** {user_data['class']}")
-        st.markdown(f"**Tần suất đăng nhập:** `{user_data['login_count']}` lần (Được lưu trong bộ nhớ tạm)")
-        st.markdown("---")
+    # Hiển thị thông tin tối giản, không hiển thị tần suất đăng nhập
+    st.subheader(f"Chào bạn, {user_data['name']} (Lớp {user_data['class']})")
+    st.markdown("---")
         
     # Nút Đăng xuất
     if st.button("Đăng xuất", type="primary"):
