@@ -17,7 +17,7 @@ API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODE
 
 SYSTEM_INSTRUCTION = (
     "Bạn là Gia sư ảo thân thiện và kiên nhẫn. Nhiệm vụ của bạn là giải đáp các câu hỏi "
-    "về Toán, Lý, Hóa cho học sinh cấp 2 và cấp 3. Hãy: "
+    "về các môn học cho học sinh cấp 2 và cấp 3. Hãy: "
     "1. Đưa ra câu trả lời chi tiết, dễ hiểu, sử dụng **LaTeX** cho tất cả công thức toán học và phương trình hóa học. "
     "2. Nếu có hình ảnh, hãy phân tích hình ảnh trước khi trả lời. "
     "3. Giữ giọng điệu chuyên nghiệp nhưng khuyến khích học sinh đặt thêm câu hỏi."
@@ -150,6 +150,7 @@ def handle_login(name, class_name):
 # ==========================
 
 def submit_chat():
+    # Lấy nội dung từ trường input và file uploader trong session state
     text = st.session_state.user_input.strip()
     uploaded_file = st.session_state.uploaded_file
 
@@ -181,7 +182,7 @@ def submit_chat():
 
     # 4. Dọn dẹp
     st.session_state.user_input = ""
-    # st.session_state.uploaded_file = None # BỎ DÒNG NÀY ĐỂ TRÁNH LỖI KHI XÓA VÀ GÁN LẠI WIDGET
+    # Reset file uploader bằng cách gán giá trị None vào key
     st.session_state["uploaded_file"] = None
 
 
@@ -204,7 +205,7 @@ def show_login():
     with st.form("login_form"):
         # Yêu cầu tên và lớp học
         name = st.text_input("Họ và tên:", placeholder="Nguyễn Văn A")
-        class_name = st.text_input("Lớp học:", placeholder="9A1")
+        class_name = st.text_input("Lớp học:", placeholder="9/1")
         submit = st.form_submit_button("Bắt đầu")
 
         if submit:
@@ -237,7 +238,7 @@ def show_chat():
                     st.write(msg["content"])
     
     # Vùng nhập liệu và tải tệp
-    # DI CHUYỂN FILE UPLOADER RA KHỎI container ĐỂ TRÁNH XUNG ĐỘT TRẠNG THÁI
+    # DI CHUYỂN FILE UPLOADER LÊN TRÊN VÙNG CHAT INPUT
     st.file_uploader(
         "Tải lên hình ảnh bài tập (Tùy chọn):", 
         type=["png", "jpg", "jpeg"],
@@ -245,16 +246,27 @@ def show_chat():
         accept_multiple_files=False
     )
     
-    # Sử dụng st.container() cho input để giữ layout gọn gàng
-    input_container = st.container()
-    with input_container:
-        # Ô nhập tin nhắn
-        st.text_input(
-            "Nhập câu hỏi của bạn:", 
-            key="user_input", 
-            on_change=submit_chat,
-            placeholder="Ví dụ: Tính đạo hàm của hàm số $y=x^2$ hoặc giải thích hiện tượng quang điện."
-        )
+    # Sử dụng form để nhóm input và button gửi
+    with st.form(key='chat_form', clear_on_submit=True):
+        col1, col2 = st.columns([5, 1])
+        
+        with col1:
+            # Ô nhập tin nhắn (Sử dụng key để có thể reset)
+            st.text_input(
+                "Nhập câu hỏi của bạn:", 
+                key="user_input", 
+                placeholder="Ví dụ: Tính đạo hàm của hàm số $y=x^2$ hoặc giải thích hiện tượng quang điện.",
+                label_visibility="collapsed" # Ẩn label để giao diện gọn hơn
+            )
+
+        with col2:
+            # NÚT GỬI TƯỜNG MINH
+            # Nút này sẽ kích hoạt khi form được submit (ấn Enter hoặc click nút)
+            submit_button = st.form_submit_button(label='Gửi', type="primary")
+
+        if submit_button:
+            # Gọi hàm submit_chat khi form được submit
+            submit_chat()
 
 
 # ==========================
@@ -265,4 +277,3 @@ if not st.session_state.logged_in:
     show_login()
 else:
     show_chat()
-
