@@ -206,4 +206,18 @@ const App = () => {
                     />
                     <button
                         onClick={handleSendMessage}
-                        className="px-4 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-
+                        // THAY THẾ CHUỖI CLASS BẰNG TEMPLATE LITERALS ĐỂ TĂNG TÍNH ỔN ĐỊNH
+                        className={`px-4 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition duration-150 disabled:opacity-50`}
+                        disabled={!isAppReady || !inputMessage.trim() || isTyping}
+                    >
+                        {isTyping ? 'Đang gửi...' : 'Gửi'}
+                    </button>
+                </div>
+                
+                <p className="text-center mt-4 text-xs text-gray-400">App ID: {appId}</p>
+            </div>
+        </div>
+    );
+};
+
+export default App;
