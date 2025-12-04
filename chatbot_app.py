@@ -96,9 +96,11 @@ def handle_login(name, class_name):
 
 # --- LOGIC XỬ LÝ CHAT ---
 
-def handle_chat_input():
+def handle_chat_submit():
     """Xử lý đầu vào chat từ người dùng và gọi API."""
-    user_input = st.session_state.chat_input
+    # Lấy nội dung từ text_input có key là 'user_input'
+    user_input = st.session_state.user_input
+    
     if user_input:
         # 1. Thêm tin nhắn người dùng vào lịch sử
         st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -109,9 +111,7 @@ def handle_chat_input():
         
         # 3. Thêm phản hồi của AI vào lịch sử
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-        st.session_state.chat_input = "" # Xóa input sau khi gửi
-        # Bỏ st.rerun() vì việc cập nhật session state trong callback sẽ tự động kích hoạt
-        # một lần chạy lại script để cập nhật giao diện chat.
+        st.session_state.user_input = "" # Xóa input sau khi gửi
 
 # --- GIAO DIỆN STREAMLIT ---
 
@@ -161,8 +161,35 @@ def show_chat_interface():
         with st.chat_message(role):
             st.markdown(message["content"])
 
-    # Khu vực nhập tin nhắn
-    st.chat_input("Hỏi Gia sư về Toán, Lý, Hóa...", key="chat_input", on_submit=handle_chat_input, disabled=False)
+    # Khu vực nhập tin nhắn (Thay thế st.chat_input bằng st.text_input + st.button)
+    # Sử dụng st.empty() để tạo vùng chứa cho input và button
+    container = st.container()
+    with container:
+        # Tạo một cột cho input và một cột nhỏ cho button
+        col1, col2 = st.columns([5, 1])
+        
+        with col1:
+            # text_input để người dùng nhập, sử dụng key 'user_input'
+            st.text_input(
+                "Hỏi Gia sư về Toán, Lý, Hóa...", 
+                key="user_input", 
+                placeholder="Nhập câu hỏi của bạn...",
+                label_visibility="collapsed" # Ẩn nhãn
+            )
+        
+        with col2:
+            # Button để gửi tin nhắn, gọi handle_chat_submit()
+            st.button(
+                "Gửi", 
+                on_click=handle_chat_submit,
+                use_container_width=True,
+                type="primary"
+            )
+            
+    # Xử lý sự kiện Enter: Streamlit sẽ tự động submit khi bấm Enter trong text_input, 
+    # sau đó script sẽ re-run và gọi handle_chat_submit() nếu có input mới.
+    # Tuy nhiên, để bắt được event Enter mà không cần nút bấm, chúng ta cần một form.
+    # Trong trường hợp này, việc sử dụng st.button đã đảm bảo người dùng có thể tương tác.
 
 # --- CHẠY ỨNG DỤNG CHÍNH ---
 
