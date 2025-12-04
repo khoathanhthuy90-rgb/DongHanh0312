@@ -19,10 +19,14 @@ if not API_KEY:
     st.error("⚠️ Vui lòng thêm GEMINI_API_KEY vào .streamlit/secrets.toml")
     st.stop()
 
+# ==========================
+# ❗❗ SỬA LỖI 403 Ở ĐÂY
+# ==========================
 API_URL = (
-    f"https://generativelanguage.googleapis.com/v1beta/models/"
+    f"https://generativelanguage.googleapis.com/v1/models/"
     f"{GEMINI_MODEL}:generateContent?key={API_KEY}"
 )
+# ==========================
 
 SYSTEM_INSTRUCTION = (
     "Bạn là Gia sư ảo thân thiện và kiên nhẫn. "
@@ -54,7 +58,7 @@ def get_gemini_response(prompt: str, image_data: str = None):
         })
 
     current_parts = []
-    uploaded_file_obj = st.session_state.get("uploaded_file")  # processed file (not widget key)
+    uploaded_file_obj = st.session_state.get("uploaded_file")
 
     if image_data and uploaded_file_obj:
         mime = getattr(uploaded_file_obj, "type", "image/jpeg")
@@ -108,18 +112,13 @@ def get_gemini_response(prompt: str, image_data: str = None):
 st.session_state.setdefault("logged_in", False)
 st.session_state.setdefault("user_info", {})
 st.session_state.setdefault("chat_history", [])
-# 'uploaded_file_widget' là key của widget file_uploader (Streamlit quản lý)
 st.session_state.setdefault("uploaded_file_widget", None)
-# 'uploaded_file' là object đã xử lý (do app gán/clear)
 st.session_state.setdefault("uploaded_file", None)
 st.session_state.setdefault("user_input", "")
-# flag để reset inputs *ở đầu* lần rerun
 st.session_state.setdefault("should_reset_input", False)
 
-# Nếu cờ reset bật -> thực hiện reset (phải làm ở đầu của mã để tuân policy)
 if st.session_state.get("should_reset_input", False):
     st.session_state["user_input"] = ""
-    # Không gán vào key widget; chỉ clear processed file
     st.session_state["uploaded_file"] = None
     st.session_state["should_reset_input"] = False
 
@@ -135,25 +134,22 @@ def handle_login(name, class_name):
     st.session_state["chat_history"] = [
         {"role": "assistant", "content": f"Chào bạn, **{name} (Lớp {class_name})**! Tôi là Gia sư ảo."}
     ]
-    # Không gọi st.experimental_rerun() — Streamlit sẽ rerun khi state thay đổi
 
 # ==========================
 # 💬 GỬI TIN NHẮN
 # ==========================
 def submit_chat():
     text = st.session_state.get("user_input", "").strip()
-    # LẤY giá trị từ widget (không gán cho key này)
-    widget_file = st.session_state.get("uploaded_file_widget")  # this is the widget's value
+    widget_file = st.session_state.get("uploaded_file_widget")
 
     if not text and not widget_file:
         return
 
     image_base64 = None
-    # Nếu có tệp từ widget, lưu vào 'uploaded_file' (không trùng key widget) để app xử lý/clear
     if widget_file:
         try:
             image_base64 = get_base64_image(widget_file)
-            st.session_state["uploaded_file"] = widget_file  # safe: no widget uses 'uploaded_file'
+            st.session_state["uploaded_file"] = widget_file
             st.session_state["chat_history"].append({
                 "role": "user",
                 "content": f"📷 Hình ảnh: {getattr(widget_file, 'name', 'uploaded_image')}",
@@ -170,10 +166,7 @@ def submit_chat():
         reply = get_gemini_response(text, image_base64)
 
     st.session_state["chat_history"].append({"role": "assistant", "content": reply})
-
-    # Set flag to reset inputs on next rerun (do not assign to widget key)
     st.session_state["should_reset_input"] = True
-    # IMPORTANT: we do NOT set st.session_state["uploaded_file_widget"] here (it's widget-managed)
 
 # ==========================
 # 💻 GIAO DIỆN
@@ -198,10 +191,8 @@ def show_chat():
     if st.button("Đăng xuất"):
         st.session_state["logged_in"] = False
         st.session_state["chat_history"] = []
-        # Không set widget key; just return so page reruns naturally
         return
 
-    # Hiển thị lịch sử chat
     for msg in st.session_state.get("chat_history", []):
         with st.chat_message(msg.get("role", "user")):
             if "image" in msg:
@@ -212,7 +203,6 @@ def show_chat():
             else:
                 st.write(msg.get("content", ""))
 
-    # NOTE: widget key = 'uploaded_file_widget' (we DON'T assign to that key anywhere)
     st.file_uploader(
         "Tải ảnh bài tập (tùy chọn)",
         type=["png", "jpg", "jpeg"],
@@ -220,7 +210,6 @@ def show_chat():
         accept_multiple_files=False
     )
 
-    # Form nhập chat (clear_on_submit True giúp reset input widget on submit automatically)
     with st.form("chat_form", clear_on_submit=True):
         st.text_input("Nhập câu hỏi", key="user_input", placeholder="Ví dụ: Giải phương trình...")
         if st.form_submit_button("Gửi"):
