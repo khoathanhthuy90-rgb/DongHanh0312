@@ -3,207 +3,165 @@ import requests
 import time
 import json
 
-# --- CẤU HÌNH API GEMINI ---
-# Cấu hình API Gemini
-GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025'
-# API_KEY sẽ được Canvas cung cấp tự động trong môi trường runtime
-API_KEY = "" 
-API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={API_KEY}"
-# --- KẾT THÚC CẤU HÌNH API ---
+# ==========================
+#   CẤU HÌNH API GEMINI
+# ==========================
 
-# --- KHỞI TẠO TRẠNG THÁI (Mô phỏng DB và Session) ---
+GEMINI_MODEL = "gemini-1.5-flash"
 
-# Nếu không có, khởi tạo trạng thái phiên (session state)
-if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
-if 'user_info' not in st.session_state:
-    st.session_state['user_info'] = {}
-if 'chat_history' not in st.session_state:
-    st.session_state['chat_history'] = []
-# Mô phỏng database để lưu trữ dữ liệu người dùng và tần suất đăng nhập
-# Key: Tên + Lớp (vd: "Nguyễn Văn A - 10A1") | Value: {'name': str, 'class': str, 'login_count': int}
-if 'user_data_db' not in st.session_state:
-    st.session_state['user_data_db'] = {}
+API_KEY = st.secrets.get("API_KEY", None)
 
-# --- LOGIC GỌI API GEMINI (Đồng bộ) ---
+if not API_KEY:
+    st.error("❌ Thiếu API_KEY trong secrets! Vui lòng thêm API_KEY vào .streamlit/secrets.toml")
+    st.stop()
 
-def get_gemini_response(prompt):
-    """Gọi API Gemini để lấy phản hồi từ Gia sư ảo."""
-    # System Instruction định nghĩa vai trò của AI
-    system_instruction = "Bạn là Gia sư ảo thân thiện và kiên nhẫn. Nhiệm vụ của bạn là giải đáp các câu hỏi về Toán, Lý, Hóa cho học sinh cấp 2 và cấp 3. Hãy đưa ra câu trả lời chi tiết, dễ hiểu và khuyến khích học sinh đặt thêm câu hỏi."
-    
-    # Xây dựng payload cho API
+API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+
+HEADERS = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {API_KEY}",
+}
+
+SYSTEM_INSTRUCTION = (
+    "Bạn là Gia sư ảo thân thiện và kiên nhẫn. "
+    "Hãy giải thích kiến thức các môn học thật dễ hiểu cho học sinh cấp 2 và cấp 3."
+)
+
+# ==========================
+#   HÀM GỌI API GEMINI
+# ==========================
+
+def get_gemini_response(prompt: str):
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "systemInstruction": {"parts": [{"text": system_instruction}]}
+        "system_instruction": {"role": "system", "parts": [{"text": SYSTEM_INSTRUCTION}]},
+        "contents": [
+            {"role": "user", "parts": [{"text": prompt}]}
+        ]
     }
 
-    try:
-        max_retries = 3
-        last_status_code = None
-        for retry_count in range(max_retries):
-            # Thực hiện POST request
-            response = requests.post(
-                API_URL, 
-                headers={'Content-Type': 'application/json'},
-                data=json.dumps(payload)
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                # Trích xuất nội dung từ phản hồi
-                text = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "Xin lỗi, tôi không thể tìm thấy câu trả lời.")
-                return text
-            
-            # Cập nhật trạng thái thất bại cuối cùng
-            last_status_code = response.status_code
-            st.warning(f"Thử lại lần {retry_count + 1}/{max_retries} thất bại. Mã trạng thái: {last_status_code}")
+    max_retries = 3
+    last_code = None
 
-            # Nếu thất bại, đợi với Exponential Backoff
-            wait_time = (2 ** retry_count) * 1
-            if retry_count < max_retries - 1:
-                time.sleep(wait_time)
-            
-        # Sau khi tất cả các lần thử thất bại
-        
-        error_message = f"Lỗi API nghiêm trọng: Không thể kết nối sau {max_retries} lần thử. Mã trạng thái cuối cùng: {last_status_code}"
-        
-        # Cung cấp thông báo chẩn đoán rõ ràng hơn cho lỗi 403
-        if last_status_code == 403 or last_status_code == 401:
-            st.error(f"{error_message}. **Đây là lỗi Xác thực (API Key).** Vui lòng kiểm tra lại cấu hình tài khoản Google của bạn hoặc tải lại Canvas để đảm bảo API Key được cung cấp chính xác.")
-        else:
-            st.error(error_message)
+    for attempt in range(max_retries):
+        try:
+            res = requests.post(API_URL, headers=HEADERS, data=json.dumps(payload))
 
-        return "Xin lỗi, tôi đang gặp lỗi kết nối API sau nhiều lần thử. Vui lòng thử lại sau."
+            if res.status_code == 200:
+                data = res.json()
+                return (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "Xin lỗi, tôi không tìm thấy câu trả lời.")
+                )
 
-    except Exception as e:
-        st.error(f"Lỗi không xác định khi gọi API: {e}")
-        return "Xin lỗi, đã xảy ra lỗi không xác định. Vui lòng kiểm tra lại kết nối."
+            last_code = res.status_code
+            time.sleep(1.5 * (attempt + 1))
 
-# --- LOGIC XỬ LÝ ĐĂNG NHẬP ---
+        except Exception as e:
+            return f"❌ Lỗi kết nối API: {e}"
+
+    return f"❌ Lỗi API (mã {last_code}). Vui lòng thử lại sau."
+
+# ==========================
+#   QUẢN LÝ SESSION STATE
+# ==========================
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if "user_info" not in st.session_state:
+    st.session_state.user_info = {}
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# ==========================
+#   ĐĂNG NHẬP
+# ==========================
 
 def handle_login(name, class_name):
-    """Xử lý logic đăng nhập, cập nhật DB mô phỏng và trạng thái."""
     if not name or not class_name:
-        st.error("Vui lòng nhập đầy đủ Họ tên và Lớp học.")
-        return False
+        st.error("⚠️ Vui lòng nhập đầy đủ thông tin.")
+        return
 
-    key = f"{name} - {class_name}"
-    
-    # 1. Kiểm tra và cập nhật DB mô phỏng (tần suất đăng nhập)
-    if key in st.session_state['user_data_db']:
-        st.session_state['user_data_db'][key]['login_count'] += 1
-    else:
-        st.session_state['user_data_db'][key] = {
-            'name': name,
-            'class': class_name,
-            'login_count': 1
-        }
-        
-    # 2. Cập nhật trạng thái phiên
-    st.session_state['user_info'] = st.session_state['user_data_db'][key]
-    st.session_state['logged_in'] = True
-    st.session_state['chat_history'] = [
-        {"role": "assistant", "content": f"Chào mừng bạn, **{name} - Lớp {class_name}**! Tôi là Gia sư ảo của bạn. Bạn đã đăng nhập **{st.session_state['user_info']['login_count']}** lần. Hãy hỏi tôi bất cứ điều gì về Toán, Lý, Hóa nhé!"}
+    st.session_state.user_info = {"name": name, "class": class_name}
+    st.session_state.logged_in = True
+
+    st.session_state.chat_history = [
+        {"role": "assistant", "content": f"Chào {name} (Lớp {class_name}) 👋. Bạn muốn hỏi gì về Toán – Lý – Hóa?"}
     ]
-    # Bỏ st.rerun() vì form submission đã tự động kích hoạt một lần chạy lại script.
-    return True
 
-# --- LOGIC XỬ LÝ CHAT ---
+    st.rerun()
 
-def handle_chat_submit():
-    """Xử lý đầu vào chat từ người dùng và gọi API."""
-    # Lấy nội dung từ text_input có key là 'user_input'
-    user_input = st.session_state.user_input
-    
-    if user_input:
-        # 1. Thêm tin nhắn người dùng vào lịch sử
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
-        
-        # 2. Hiển thị trạng thái chờ và gọi API
-        with st.spinner("Gia sư ảo đang suy nghĩ..."):
-            ai_response = get_gemini_response(user_input)
-        
-        # 3. Thêm phản hồi của AI vào lịch sử
-        st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-        st.session_state.user_input = "" # Xóa input sau khi gửi
 
-# --- GIAO DIỆN STREAMLIT ---
+# ==========================
+#   GỬI TIN NHẮN
+# ==========================
 
-st.set_page_config(page_title="Đề Tài Nghiên Cứu Khoa Học", layout="centered")
+def submit_chat():
+    text = st.session_state.user_input.strip()
+    if not text:
+        return
 
-st.title("👨‍🏫 Gia Sư Ảo của Bạn")
+    st.session_state.chat_history.append({"role": "user", "content": text})
+
+    with st.spinner("⏳ Gia sư đang suy nghĩ..."):
+        reply = get_gemini_response(text)
+
+    st.session_state.chat_history.append({"role": "assistant", "content": reply})
+
+    st.session_state.user_input = ""
+
+
+# ==========================
+#   GIAO DIỆN
+# ==========================
+
+st.set_page_config(page_title="Gia sư ảo", layout="centered")
+
+st.title("👨‍🏫 Gia Sư Ảo Thông Minh")
 st.markdown("---")
 
 
-# Hàm hiển thị form Đăng nhập
-def show_login_form():
-    """Hiển thị form đăng nhập cho học sinh."""
-    st.subheader("Nhập thông tin để bắt đầu")
-    
+# FORM ĐĂNG NHẬP
+def show_login():
+    st.subheader("Đăng nhập để bắt đầu học")
+
     with st.form("login_form"):
-        st.info("Chúng tôi yêu cầu Họ tên và Lớp học để theo dõi tần suất đăng nhập của bạn.")
-        
-        name = st.text_input("Họ và Tên:", placeholder="Ví dụ: Nguyễn Văn A")
-        class_name = st.text_input("Lớp học:", placeholder="Ví dụ: 10A1")
-        
-        submitted = st.form_submit_button("Bắt đầu chat với Gia sư")
-        
-        if submitted:
-            # handle_login sẽ được gọi và form submission tự động gây ra re-run
+        name = st.text_input("Họ và tên:")
+        class_name = st.text_input("Lớp học:")
+        submit = st.form_submit_button("Bắt đầu")
+
+        if submit:
             handle_login(name, class_name)
 
-# Hàm hiển thị giao diện Chat
-def show_chat_interface():
-    """Hiển thị giao diện chat và dashboard người dùng, tập trung vào tương tác AI."""
-    
-    user_data = st.session_state.user_info
-    
-    # Hiển thị thông tin tối giản, không hiển thị tần suất đăng nhập
-    st.subheader(f"Chào bạn, {user_data['name']} (Lớp {user_data['class']})")
+
+# GIAO DIỆN CHAT
+def show_chat():
+    user = st.session_state.user_info
+    st.subheader(f"Xin chào, {user['name']} (Lớp {user['class']})")
     st.markdown("---")
-        
-    # Nút Đăng xuất
-    if st.button("Đăng xuất", type="primary"):
-        st.session_state['logged_in'] = False
-        st.session_state['user_info'] = {}
-        st.session_state['chat_history'] = []
-        st.rerun() # Giữ lại st.rerun() ở đây để ngay lập tức chuyển về màn hình đăng nhập
 
-    # Khu vực hiển thị tin nhắn
-    for message in st.session_state.chat_history:
-        role = "assistant" if message["role"] == "assistant" else "user"
-        with st.chat_message(role):
-            st.markdown(message["content"])
+    if st.button("Đăng xuất"):
+        st.session_state.logged_in = False
+        st.session_state.chat_history = []
+        st.rerun()
 
-    # Khu vực nhập tin nhắn (Thay thế st.chat_input bằng st.text_input + st.button)
-    # Sử dụng st.empty() để tạo vùng chứa cho input và button
-    container = st.container()
-    with container:
-        # Tạo một cột cho input và một cột nhỏ cho button
-        col1, col2 = st.columns([5, 1])
-        
-        with col1:
-            # text_input để người dùng nhập, sử dụng key 'user_input'
-            st.text_input(
-                "Hỏi Gia sư về vấn đề gì?", 
-                key="user_input", 
-                placeholder="Nhập câu hỏi của bạn...",
-                label_visibility="collapsed" # Ẩn nhãn
-            )
-        
-        with col2:
-            # Button để gửi tin nhắn, gọi handle_chat_submit()
-            st.button(
-                "Gửi", 
-                on_click=handle_chat_submit,
-                use_container_width=True,
-                type="primary"
-            )
-            
-# --- CHẠY ỨNG DỤNG CHÍNH ---
+    # Lịch sử chat
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
 
-if not st.session_state['logged_in']:
-    show_login_form()
+    # Ô nhập + nút gửi
+    st.text_input("Nhập tin nhắn...", key="user_input", on_change=submit_chat)
+
+
+# ==========================
+#   CHẠY ỨNG DỤNG
+# ==========================
+
+if not st.session_state.logged_in:
+    show_login()
 else:
-    show_chat_interface()
+    show_chat()
