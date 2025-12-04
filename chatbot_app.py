@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-// CẢNH BÁO: ĐÃ LOẠI BỎ TẤT CẢ CODE FIREBASE ĐỂ TRÁNH LỖI CẤU HÌNH
-// Ứng dụng đang chạy ở chế độ giả lập (In-Memory). Dữ liệu sẽ mất khi làm mới trang.
+// --- LƯU Ý QUAN TRỌNG ---
+// ĐÃ LOẠI BỎ CÁC BIẾN CẤU HÌNH FIREBASE GLOBAL MỘT CÁCH CƯỠNG BỨC
+// ĐỂ KHẮC PHỤC LỖI "Invalid control character" VĨNH VIỄN.
+// Ứng dụng chạy ổn định, nhưng dữ liệu chat sẽ mất khi làm mới trang (In-Memory).
 
 // --- Cấu hình Giả lập & API ---
 let chatMessages = [];
 const userId = 'GiaSu_' + Math.random().toString(36).substring(2, 8); 
-const appId = 'In-Memory-App';
+const appId = 'SAFE-MODE-APP';
 
 // Cấu hình API Gemini
 const GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025';
@@ -25,18 +27,18 @@ const formatTime = (timestamp) => {
 const ActivityDashboard = ({ currentUserId }) => {
     return (
         <div className="mt-4 p-4 rounded-xl bg-yellow-50 border border-yellow-200">
-            <h2 className="text-xl font-bold text-yellow-700 mb-2">Bảng Điều Khiển Hoạt Động (ĐANG GIẢ LẬP)</h2>
+            <h2 className="text-xl font-bold text-yellow-700 mb-2">Bảng Điều Khiển Hoạt Động (CHẾ ĐỘ AN TOÀN)</h2>
             <p className="text-sm text-yellow-600 font-semibold">
-                [LỖI] LỖI KỸ THUẬT FIREBASE ĐÃ XẢY RA! Ứng dụng đang chạy chế độ ổn định/không lưu trữ.
+                [LỖI NGHIÊM TRỌNG] Chức năng kiểm soát và lưu trữ đã bị tắt hoàn toàn để đảm bảo ứng dụng chạy ổn định.
             </p>
             <p className="text-xs text-yellow-600 mt-2">
-                Hoạt động chỉ được **GHI LOG VÀO CONSOLE** để mô phỏng. Dữ liệu sẽ không được lưu vĩnh viễn lúc này.
+                Bạn chỉ có thể sử dụng chức năng chat với Gia sư ảo (AI).
             </p>
         </div>
     );
 };
 
-// --- LOGIC GỌI API GEMINI MỚI ---
+// --- LOGIC GỌI API GEMINI ---
 const fetchGeminiResponse = async (prompt) => {
     const systemInstruction = "Bạn là Gia sư ảo thân thiện và kiên nhẫn. Nhiệm vụ của bạn là giải đáp các câu hỏi về Toán, Lý, Hóa cho học sinh cấp 2 và cấp 3. Hãy đưa ra câu trả lời chi tiết, dễ hiểu và khuyến khích học sinh đặt thêm câu hỏi.";
     
@@ -52,6 +54,7 @@ const fetchGeminiResponse = async (prompt) => {
         let retryCount = 0;
         const maxRetries = 3;
         
+        // Thực hiện Retry với Exponential Backoff
         while (retryCount < maxRetries) {
             response = await fetch(API_URL, {
                 method: 'POST',
@@ -98,7 +101,7 @@ const App = () => {
     }, [isAppReady]);
 
 
-    // --- 3. Xử lý Gửi Tin nhắn (Tích hợp AI) ---
+    // --- Xử lý Gửi Tin nhắn (Tích hợp AI) ---
     const handleSendMessage = async () => {
         const userMessage = inputMessage.trim();
         if (!userMessage || !isAppReady || isTyping) return;
@@ -141,13 +144,13 @@ const App = () => {
     return (
         <div className="min-h-screen bg-gray-100 p-4 flex flex-col items-center">
             <div className="w-full max-w-xl bg-white p-6 rounded-xl shadow-2xl">
-                <h1 className="text-3xl font-extrabold text-center text-green-700 mb-2">Gia Sư Ảo Chat (Có AI)</h1>
-                <p className="text-sm text-center text-gray-500 mb-4">Ứng dụng ổn định, có thể hỏi đáp Toán Lý Hóa.</p>
+                <h1 className="text-3xl font-extrabold text-center text-green-700 mb-2">Gia Sư Ảo Chat (Chế Độ An Toàn)</h1>
+                <p className="text-sm text-center text-gray-500 mb-4">Mọi tương tác đã được chuyển sang chế độ AI.</p>
 
-                {/* HỘP TRẠNG THÁI MỚI (An toàn ASCII) */}
+                {/* HỘP TRẠNG THÁI MỚI (An toàn tuyệt đối) */}
                 <div className="p-3 mb-4 rounded-lg border shadow-sm bg-green-100 border-green-400">
                     <p className="text-sm font-bold text-green-700">
-                        [OK] Sẵn sàng (AI Đã Tích hợp)
+                        [OK] Sẵn sàng (AI Đã Tích hợp, Đã loại bỏ lỗi cấu hình)
                     </p>
                     <p className="text-xs text-gray-600 mt-1">
                         UID Giả Lập: <span className="font-mono text-xs p-1 bg-gray-200 rounded">{userId}</span>
@@ -203,17 +206,4 @@ const App = () => {
                     />
                     <button
                         onClick={handleSendMessage}
-                        className="px-4 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition duration-150 disabled:opacity-50"
-                        disabled={!isAppReady || !inputMessage.trim() || isTyping}
-                    >
-                        {isTyping ? 'Đang gửi...' : 'Gửi'}
-                    </button>
-                </div>
-                
-                <p className="text-center mt-4 text-xs text-gray-400">App ID: {appId}</p>
-            </div>
-        </div>
-    );
-};
-
-export default App;
+                        className="px-4 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-
