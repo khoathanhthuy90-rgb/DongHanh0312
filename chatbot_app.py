@@ -1,175 +1,104 @@
-import React, { useState, useEffect, useCallback } from 'react';
+from flask import Flask, render_template_string, request
+import requests
+import uuid
+import time
 
-// CONFIG
-// Note: Add your API key here. Do not leave it empty.
-const GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025';
-const API_KEY = ""; // Add your API key here
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${API_KEY}`;
+# ==============================
+# CONFIG
+# ==============================
+GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"
+API_KEY = ""   # <-- Điền API KEY vào đây
+API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={API_KEY}"
 
-// Create unique ID
-const userId = 'GiaSu_' + (window.crypto?.randomUUID?.().slice(0, 8) || "User1234");
-const appId = 'SAFE-MODE-APP';
+app = Flask(__name__)
 
-// Format timestamp
-const formatTime = (timestamp) => {
-  if (!timestamp) return '...';
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-};
+# ==============================
+# GEMINI API
+# ==============================
+def ask_gemini(prompt):
+    if not API_KEY:
+        return "Lỗi: Bạn chưa nhập API KEY."
 
-// Gemini API
-const fetchGeminiResponse = async (prompt) => {
-  if (!API_KEY) return "Loi: Ban chua nhap API KEY.";
-
-  const payload = {
-    contents: [{ parts: [{ text: prompt }] }],
-    systemInstruction: {
-      parts: [{ text: "Ban la gia su ao than thien, giai thich cham rai, de hieu." }]
-    }
-  };
-
-  try {
-    let retry = 0;
-    const maxRetry = 3;
-
-    while (retry < maxRetry) {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || "Khong tim thay cau tra loi.";
-      }
-
-      retry++;
-      await new Promise(r => setTimeout(r, 1000 * 2 ** retry));
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "systemInstruction": {
+            "parts": [{"text": "Bạn là Gia sư ảo thân thiện, giải thích chậm rãi, dễ hiểu."}]
+        }
     }
 
-    return "API hien khong phan hoi. Vui long thu lai.";
-  } catch (err) {
-    console.error(err);
-    return "Da xay ra loi.";
-  }
-};
+    try:
+        response = requests.post(API_URL, json=payload, timeout=20)
 
-// Dashboard
-const ActivityDashboard = ({ currentUserId }) => (
-  <div className="mt-4 p-4 rounded-xl bg-yellow-50 border border-yellow-200">
-    <h2 className="text-xl font-bold text-yellow-700 mb-2">Bang dieu khien hoat dong (Safe Mode)</h2>
-    <p className="text-sm text-yellow-600 font-semibold">Luu tru tam thoi da tat.</p>
-    <p className="text-xs text-yellow-600 mt-1">Chi ho tro chat voi Gia su ao.</p>
-  </div>
-);
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        return f"Lỗi API: {response.status_code}"
+    except Exception as e:
+        return f"Lỗi khi gọi API: {e}"
 
-// APP
-export default function App() {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    setReady(true);
-    console.log("APP LOADED — UID:", userId);
-  }, []);
+# ==============================
+# HTML TEMPLATE (GIAO DIỆN WEB)
+# ==============================
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>Gia Sư Ảo Python</title>
+    <style>
+        body { font-family: Arial; background: #f3f3f3; padding: 20px; }
+        .box { width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
+        .msg-user { text-align: right; color: green; margin: 10px 0; }
+        .msg-ai { text-align: left; color: #333; margin: 10px 0; }
+        textarea { width: 100%; height: 80px; margin-top: 10px; }
+        button { padding: 10px 20px; margin-top: 10px; background: green; color: white; border: none; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>💬 Gia Sư Ảo (Python Flask)</h2>
+        <form method="POST">
+            <label>Nhập câu hỏi:</label>
+            <textarea name="message" required>{{user_input}}</textarea>
+            <button type="submit">Gửi</button>
+        </form>
 
-  const logActivity = useCallback((type, details = {}) => {
-    if (!ready) return;
-    console.log("[LOG]", type, { userId, time: Date.now(), ...details });
-  }, [ready]);
-
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text || isTyping || !ready) return;
-
-    const newMsg = {
-      id: window.crypto.randomUUID(),
-      userId,
-      message: text,
-      timestamp: Date.now()
-    };
-
-    setMessages(prev => [...prev, newMsg]);
-    setInput('');
-    setIsTyping(true);
-
-    logActivity("USER_MESSAGE", { length: text.length });
-
-    const reply = await fetchGeminiResponse(text);
-
-    const aiMsg = {
-      id: window.crypto.randomUUID(),
-      userId: 'AI-GiaSu',
-      message: reply,
-      timestamp: Date.now()
-    };
-
-    setMessages(prev => [...prev, aiMsg]);
-    setIsTyping(false);
-    logActivity("AI_MESSAGE", { length: reply.length });
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-100 p-4 flex flex-col items-center">
-      <div className="w-full max-w-xl bg-white p-6 rounded-xl shadow-2xl">
-        <h1 className="text-3xl font-extrabold text-center text-green-700 mb-2">Gia Su Ao Chat</h1>
-        <p className="text-sm text-center text-gray-500 mb-4">Safe Mode / Khong luu tru</p>
-
-        <div className="p-3 mb-4 rounded-lg border bg-green-100 border-green-400">
-          <p className="text-sm font-bold text-green-700">Da san sang</p>
-          <p className="text-xs text-gray-600">UID: {userId}</p>
-        </div>
-
-        <ActivityDashboard currentUserId={userId} />
-
-        <div className="h-96 overflow-y-auto p-3 bg-gray-50 rounded-lg my-4 border space-y-3">
-          {messages.length === 0 ? (
-            <p className="text-center text-gray-400 italic">Hay bat dau hoi mot cau hoi!</p>
-          ) : messages.map(msg => (
-            <div key={msg.id} className={`flex ${msg.userId === userId ? 'justify-end' : 'justify-start'}`}>
-              <div className={`p-3 rounded-xl max-w-[80%] shadow-md ${msg.userId === userId ? 'bg-green-500 text-white' : 'bg-indigo-100 text-gray-800'}`}>
-                <p className="text-xs font-bold mb-1">
-                  {msg.userId === userId ? 'Ban' : 'Gia su ao'}
-                </p>
-                <p>{msg.message}</p>
-                <span className="text-xs block text-right opacity-70">{formatTime(msg.timestamp)}</span>
-              </div>
-            </div>
-          ))}
-
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="p-3 bg-gray-200 rounded-xl shadow-md animate-pulse">
-                Gia su dang go...
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex space-x-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Nhap cau hoi..."
-            disabled={!ready || isTyping}
-            className="flex-grow p-3 border rounded-lg"
-          />
-
-          <button
-            onClick={handleSend}
-            disabled={!ready || !input.trim() || isTyping}
-            className="px-4 py-3 bg-green-600 text-white rounded-lg"
-          >
-            {isTyping ? 'Dang gui...' : 'Gui'}
-          </button>
-        </div>
-
-        <p className="text-center mt-4 text-xs text-gray-400">App ID: {appId}</p>
-      </div>
+        {% if user_message %}
+            <p class="msg-user"><b>Bạn:</b> {{user_message}}</p>
+        {% endif %}
+        {% if ai_message %}
+            <p class="msg-ai"><b>Gia sư ảo:</b> {{ai_message}}</p>
+        {% endif %}
     </div>
-  );
-}
+</body>
+</html>
+"""
+
+
+# ==============================
+# ROUTES
+# ==============================
+@app.route("/", methods=["GET", "POST"])
+def home():
+    user_input = ""
+    user_message = ""
+    ai_message = ""
+
+    if request.method == "POST":
+        user_input = request.form.get("message", "")
+        user_message = user_input
+        ai_message = ask_gemini(user_input)
+
+    return render_template_string(HTML,
+                                  user_input=user_input,
+                                  user_message=user_message,
+                                  ai_message=ai_message)
+
+
+# ==============================
+# RUN APP
+# ==============================
+if __name__ == "__main__":
+    print("🔥 Server chạy tại: http://127.0.0.1:5000")
+    app.run(debug=True)
