@@ -45,12 +45,16 @@ def get_gemini_response(prompt: str, image_data: str = None):
     # 1. Chuẩn bị nội dung (contents)
     contents = []
     
+    # Lấy file từ session state, vì nó đã được cập nhật bởi widget file_uploader
+    uploaded_file_info = st.session_state.uploaded_file
+
     if image_data:
         # Thêm phần hình ảnh
         contents.append({
             "inlineData": {
-                # Mime type của tệp tải lên (chúng ta giả định là image/png hoặc image/jpeg)
-                "mimeType": st.session_state.uploaded_file.type,
+                # Mime type của tệp tải lên
+                # Cần đảm bảo file info còn tồn tại để lấy type
+                "mimeType": uploaded_file_info.type if uploaded_file_info else "image/jpeg",
                 "data": image_data
             }
         })
@@ -157,6 +161,7 @@ def submit_chat():
     # 1. Xử lý hình ảnh nếu có
     if uploaded_file:
         try:
+            # Lấy base64 từ file đã upload
             image_base64 = get_base64_image(uploaded_file)
             st.session_state.chat_history.append({"role": "user", "content": f"Hình ảnh đã tải lên ({uploaded_file.name})", "image": uploaded_file})
         except Exception as e:
@@ -176,7 +181,8 @@ def submit_chat():
 
     # 4. Dọn dẹp
     st.session_state.user_input = ""
-    st.session_state.uploaded_file = None # Xóa file đã tải lên sau khi gửi
+    # st.session_state.uploaded_file = None # BỎ DÒNG NÀY ĐỂ TRÁNH LỖI KHI XÓA VÀ GÁN LẠI WIDGET
+    st.session_state["uploaded_file"] = None
 
 
 # ==========================
@@ -231,17 +237,17 @@ def show_chat():
                     st.write(msg["content"])
     
     # Vùng nhập liệu và tải tệp
+    # DI CHUYỂN FILE UPLOADER RA KHỎI container ĐỂ TRÁNH XUNG ĐỘT TRẠNG THÁI
+    st.file_uploader(
+        "Tải lên hình ảnh bài tập (Tùy chọn):", 
+        type=["png", "jpg", "jpeg"],
+        key="uploaded_file", 
+        accept_multiple_files=False
+    )
+    
+    # Sử dụng st.container() cho input để giữ layout gọn gàng
     input_container = st.container()
     with input_container:
-        
-        # File uploader để tải hình ảnh (sử dụng key 'uploaded_file')
-        st.file_uploader(
-            "Tải lên hình ảnh bài tập (Tùy chọn):", 
-            type=["png", "jpg", "jpeg"],
-            key="uploaded_file", 
-            accept_multiple_files=False
-        )
-
         # Ô nhập tin nhắn
         st.text_input(
             "Nhập câu hỏi của bạn:", 
