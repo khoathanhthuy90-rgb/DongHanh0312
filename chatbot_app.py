@@ -91,7 +91,7 @@ def handle_login(name, class_name):
     st.session_state['chat_history'] = [
         {"role": "assistant", "content": f"Chào mừng bạn, **{name} - Lớp {class_name}**! Tôi là Gia sư ảo của bạn. Bạn đã đăng nhập **{st.session_state['user_info']['login_count']}** lần. Hãy hỏi tôi bất cứ điều gì về Toán, Lý, Hóa nhé!"}
     ]
-    st.rerun() # Tải lại ứng dụng để chuyển sang giao diện chat
+    # Bỏ st.rerun() vì form submission đã tự động kích hoạt một lần chạy lại script.
     return True
 
 # --- LOGIC XỬ LÝ CHAT ---
@@ -110,7 +110,8 @@ def handle_chat_input():
         # 3. Thêm phản hồi của AI vào lịch sử
         st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
         st.session_state.chat_input = "" # Xóa input sau khi gửi
-        st.rerun() # Tải lại trang để cập nhật lịch sử chat
+        # Bỏ st.rerun() vì việc cập nhật session state trong callback sẽ tự động kích hoạt
+        # một lần chạy lại script để cập nhật giao diện chat.
 
 # --- GIAO DIỆN STREAMLIT ---
 
@@ -134,6 +135,7 @@ def show_login_form():
         submitted = st.form_submit_button("Bắt đầu chat với Gia sư")
         
         if submitted:
+            # handle_login sẽ được gọi và form submission tự động gây ra re-run
             handle_login(name, class_name)
 
 # Hàm hiển thị giao diện Chat
@@ -157,7 +159,7 @@ def show_chat_interface():
         st.session_state['logged_in'] = False
         st.session_state['user_info'] = {}
         st.session_state['chat_history'] = []
-        st.rerun()
+        st.rerun() # Giữ lại st.rerun() ở đây để ngay lập tức chuyển về màn hình đăng nhập
 
     # Khu vực hiển thị tin nhắn
     for message in st.session_state.chat_history:
