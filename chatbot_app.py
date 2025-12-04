@@ -55,7 +55,7 @@ def get_gemini_response(prompt):
                 text = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "Xin lỗi, tôi không thể tìm thấy câu trả lời.")
                 return text
             
-            # Cập nhật trạng thái thất bại cuối cùng và cảnh báo
+            # Cập nhật trạng thái thất bại cuối cùng
             last_status_code = response.status_code
             st.warning(f"Thử lại lần {retry_count + 1}/{max_retries} thất bại. Mã trạng thái: {last_status_code}")
 
@@ -65,8 +65,16 @@ def get_gemini_response(prompt):
                 time.sleep(wait_time)
             
         # Sau khi tất cả các lần thử thất bại
-        st.error(f"Lỗi API nghiêm trọng: Không thể kết nối sau {max_retries} lần thử. Mã trạng thái cuối cùng: {last_status_code}")
-        return "Xin lỗi, tôi đang gặp lỗi kết nối API sau nhiều lần thử. Vui lòng thử lại sau. (Vui lòng kiểm tra lại API Key hoặc trạng thái dịch vụ)."
+        
+        error_message = f"Lỗi API nghiêm trọng: Không thể kết nối sau {max_retries} lần thử. Mã trạng thái cuối cùng: {last_status_code}"
+        
+        # Cung cấp thông báo chẩn đoán rõ ràng hơn cho lỗi 403
+        if last_status_code == 403 or last_status_code == 401:
+            st.error(f"{error_message}. **Đây là lỗi Xác thực (API Key).** Vui lòng kiểm tra lại cấu hình tài khoản Google của bạn hoặc tải lại Canvas để đảm bảo API Key được cung cấp chính xác.")
+        else:
+            st.error(error_message)
+
+        return "Xin lỗi, tôi đang gặp lỗi kết nối API sau nhiều lần thử. Vui lòng thử lại sau."
 
     except Exception as e:
         st.error(f"Lỗi không xác định khi gọi API: {e}")
@@ -122,9 +130,9 @@ def handle_chat_submit():
 
 # --- GIAO DIỆN STREAMLIT ---
 
-st.set_page_config(page_title="Gia Sư Ảo Streamlit", layout="centered")
+st.set_page_config(page_title="Đề Tài Nghiên Cứu Khoa Học", layout="centered")
 
-st.title("👨‍🏫 Gia Sư Ảo AI - Toán, Lý, Hóa")
+st.title("👨‍🏫 Gia Sư Ảo của Bạn")
 st.markdown("---")
 
 
@@ -178,7 +186,7 @@ def show_chat_interface():
         with col1:
             # text_input để người dùng nhập, sử dụng key 'user_input'
             st.text_input(
-                "Hỏi Gia sư về Toán, Lý, Hóa...", 
+                "Hỏi Gia sư về vấn đề gì?", 
                 key="user_input", 
                 placeholder="Nhập câu hỏi của bạn...",
                 label_visibility="collapsed" # Ẩn nhãn
@@ -193,11 +201,6 @@ def show_chat_interface():
                 type="primary"
             )
             
-    # Xử lý sự kiện Enter: Streamlit sẽ tự động submit khi bấm Enter trong text_input, 
-    # sau đó script sẽ re-run và gọi handle_chat_submit() nếu có input mới.
-    # Tuy nhiên, để bắt được event Enter mà không cần nút bấm, chúng ta cần một form.
-    # Trong trường hợp này, việc sử dụng st.button đã đảm bảo người dùng có thể tương tác.
-
 # --- CHẠY ỨNG DỤNG CHÍNH ---
 
 if not st.session_state['logged_in']:
