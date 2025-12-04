@@ -40,6 +40,7 @@ def get_gemini_response(prompt):
 
     try:
         max_retries = 3
+        last_status_code = None
         for retry_count in range(max_retries):
             # Thực hiện POST request
             response = requests.post(
@@ -54,12 +55,18 @@ def get_gemini_response(prompt):
                 text = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "Xin lỗi, tôi không thể tìm thấy câu trả lời.")
                 return text
             
+            # Cập nhật trạng thái thất bại cuối cùng và cảnh báo
+            last_status_code = response.status_code
+            st.warning(f"Thử lại lần {retry_count + 1}/{max_retries} thất bại. Mã trạng thái: {last_status_code}")
+
             # Nếu thất bại, đợi với Exponential Backoff
             wait_time = (2 ** retry_count) * 1
             if retry_count < max_retries - 1:
                 time.sleep(wait_time)
             
-        return "Xin lỗi, tôi đang gặp lỗi kết nối API sau nhiều lần thử. Vui lòng thử lại sau."
+        # Sau khi tất cả các lần thử thất bại
+        st.error(f"Lỗi API nghiêm trọng: Không thể kết nối sau {max_retries} lần thử. Mã trạng thái cuối cùng: {last_status_code}")
+        return "Xin lỗi, tôi đang gặp lỗi kết nối API sau nhiều lần thử. Vui lòng thử lại sau. (Vui lòng kiểm tra lại API Key hoặc trạng thái dịch vụ)."
 
     except Exception as e:
         st.error(f"Lỗi không xác định khi gọi API: {e}")
