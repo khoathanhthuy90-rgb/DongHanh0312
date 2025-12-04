@@ -1,6 +1,3 @@
-// Gia Sư Ảo Chat App (Chế Độ An Toàn - Tối ưu hóa cho môi trường biên dịch lỗi)
-// Ứng dụng này đã được cấu hình để tránh các lỗi liên quan đến Firebase/Control Character.
-// Dữ liệu chat KHÔNG được lưu trữ (In-Memory Only).
 import React, { useState, useEffect, useCallback } from 'react';
 
 // --- LƯU Ý QUAN TRỌNG ---
