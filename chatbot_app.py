@@ -27,7 +27,7 @@ const ActivityDashboard = ({ currentUserId }) => {
         <div className="mt-4 p-4 rounded-xl bg-yellow-50 border border-yellow-200">
             <h2 className="text-xl font-bold text-yellow-700 mb-2">Bảng Điều Khiển Hoạt Động (ĐANG GIẢ LẬP)</h2>
             <p className="text-sm text-yellow-600 font-semibold">
-                ❌ LỖI KỸ THUẬT FIREBASE ĐÃ XẢY RA! Ứng dụng đang chạy chế độ ổn định/không lưu trữ.
+                [LỖI] LỖI KỸ THUẬT FIREBASE ĐÃ XẢY RA! Ứng dụng đang chạy chế độ ổn định/không lưu trữ.
             </p>
             <p className="text-xs text-yellow-600 mt-2">
                 Hoạt động chỉ được **GHI LOG VÀO CONSOLE** để mô phỏng. Dữ liệu sẽ không được lưu vĩnh viễn lúc này.
@@ -52,7 +52,6 @@ const fetchGeminiResponse = async (prompt) => {
         let retryCount = 0;
         const maxRetries = 3;
         
-        // Thực hiện Retry với Exponential Backoff
         while (retryCount < maxRetries) {
             response = await fetch(API_URL, {
                 method: 'POST',
@@ -66,7 +65,6 @@ const fetchGeminiResponse = async (prompt) => {
                 return text;
             }
 
-            // Nếu không OK, chờ và thử lại
             retryCount++;
             const delay = Math.pow(2, retryCount) * 1000;
             if (retryCount < maxRetries) {
@@ -74,7 +72,6 @@ const fetchGeminiResponse = async (prompt) => {
             }
         }
         
-        // Nếu tất cả các lần thử đều thất bại
         return "Xin lỗi, tôi đang gặp lỗi kết nối API. Vui lòng thử lại sau.";
 
     } catch (error) {
@@ -87,7 +84,7 @@ const App = () => {
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const [isAppReady, setIsAppReady] = useState(false);
-    const [isTyping, setIsTyping] = useState(false); // Trạng thái AI đang gõ
+    const [isTyping, setIsTyping] = useState(false); 
     
     useEffect(() => {
         setMessages([...chatMessages]); 
@@ -119,7 +116,7 @@ const App = () => {
         logActivity('SEND_MESSAGE_USER', { messageLength: userMessage.length });
 
         setInputMessage('');
-        setIsTyping(true); // Bắt đầu trạng thái "AI đang gõ"
+        setIsTyping(true); 
         
         // 2. Gọi API để lấy phản hồi của Gia sư ảo
         const aiResponseText = await fetchGeminiResponse(userMessage);
@@ -127,9 +124,9 @@ const App = () => {
         // 3. Hiển thị phản hồi của Gia sư ảo
         const aiMessage = {
             id: Date.now() + 1,
-            userId: 'Gemini-GiaSu', // ID đặc biệt cho AI
+            userId: 'Gemini-GiaSu', 
             message: aiResponseText,
-            timestamp: Date.now() + 1 // Đảm bảo ID và thời gian khác nhau
+            timestamp: Date.now() + 1
         };
 
         chatMessages.push(aiMessage);
@@ -137,7 +134,7 @@ const App = () => {
         
         logActivity('SEND_MESSAGE_AI', { messageLength: aiResponseText.length });
 
-        setIsTyping(false); // Kết thúc trạng thái "AI đang gõ"
+        setIsTyping(false); 
     };
 
     // --- Giao Diện ---
@@ -147,10 +144,10 @@ const App = () => {
                 <h1 className="text-3xl font-extrabold text-center text-green-700 mb-2">Gia Sư Ảo Chat (Có AI)</h1>
                 <p className="text-sm text-center text-gray-500 mb-4">Ứng dụng ổn định, có thể hỏi đáp Toán Lý Hóa.</p>
 
-                {/* HỘP TRẠNG THÁI MỚI (Màu Xanh Lá) */}
+                {/* HỘP TRẠNG THÁI MỚI (An toàn ASCII) */}
                 <div className="p-3 mb-4 rounded-lg border shadow-sm bg-green-100 border-green-400">
                     <p className="text-sm font-bold text-green-700">
-                        ✅ Sẵn sàng (AI Đã Tích hợp)
+                        [OK] Sẵn sàng (AI Đã Tích hợp)
                     </p>
                     <p className="text-xs text-gray-600 mt-1">
                         UID Giả Lập: <span className="font-mono text-xs p-1 bg-gray-200 rounded">{userId}</span>
