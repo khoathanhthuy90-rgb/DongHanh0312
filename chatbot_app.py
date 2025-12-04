@@ -8,7 +8,6 @@ from io import BytesIO
 # ==========================
 # ⚙️ CẤU HÌNH API GEMINI
 # ==========================
-
 GEMINI_MODEL = "gemini-2.0-flash"
 
 try:
@@ -31,35 +30,34 @@ SYSTEM_INSTRUCTION = (
 )
 
 # ==========================
-# 🖼️ BASE64 IMAGE
+# 🖼️ CHUYỂN ĐỔI HÌNH ẢNH BASE64
 # ==========================
-
 def get_base64_image(image_file):
     if image_file is None:
         return None
     return base64.b64encode(image_file.getvalue()).decode("utf-8")
 
 # ==========================
-# 🤖 API CALL
+# 🤖 HÀM GỌI API GEMINI
 # ==========================
-
 def get_gemini_response(prompt: str, image_data: str = None):
-    history = st.session_state.get("chat_history", [])[:-1]
+    chat_history = st.session_state.get("chat_history", [])
+    history_for_api = chat_history[:-1] if len(chat_history) > 0 else []
 
     history_contents = []
-    for msg in history:
+    for msg in history_for_api:
         if not msg.get("content"):
             continue
         history_contents.append({
-            "role": msg["role"],
+            "role": msg.get("role", "user"),
             "parts": [{"text": msg["content"]}]
         })
 
     current_parts = []
-    uploaded_file = st.session_state.get("uploaded_file")
+    uploaded_file_obj = st.session_state.get("uploaded_file")  # processed file (not widget key)
 
-    if image_data and uploaded_file:
-        mime = getattr(uploaded_file, "type", "image/jpeg")
+    if image_data and uploaded_file_obj:
+        mime = getattr(uploaded_file_obj, "type", "image/jpeg")
         current_parts.append({
             "inlineData": {"mimeType": mime, "data": image_data}
         })
@@ -77,120 +75,112 @@ def get_gemini_response(prompt: str, image_data: str = None):
         "systemInstruction": {"role": "system", "parts": [{"text": SYSTEM_INSTRUCTION}]}
     }
 
-    res = requests.post(
-        API_URL,
-        headers={"Content-Type": "application/json"},
-        json=payload
-    )
+    try:
+        res = requests.post(
+            API_URL,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=30
+        )
+    except requests.RequestException as e:
+        return f"❌ Lỗi kết nối API: {e}"
 
     if res.status_code == 200:
-        data = res.json()
-        text = (
-            data.get("candidates", [{}])[0]
-                .get("content", {})
-                .get("parts", [{}])[0]
-                .get("text", None)
-        )
-        return text or "Không tìm thấy nội dung trả lời."
-
-    if res.status_code in (401, 403):
-        return f"❌ API KEY không hợp lệ hoặc không có quyền truy cập (mã {res.status_code})."
-
-    return f"❌ Lỗi API: mã {res.status_code}"
-
-# ==========================
-# 💾 SESSION STATE
-# ==========================
-
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-
-if "user_info" not in st.session_state:
-    st.session_state["user_info"] = {}
-
-if "chat_history" not in st.session_state:
-    st.session_state["chat_history"] = []
-
-if "uploaded_file" not in st.session_state:
-    st.session_state["uploaded_file"] = None
-
-# Flag reset input sau khi gửi
-if "should_reset_input" not in st.session_state:
-    st.session_state["should_reset_input"] = False
+        try:
+            data = res.json()
+            text = (
+                data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", None)
+            )
+            return text or "Không nhận được phản hồi từ model."
+        except Exception:
+            return "Không thể phân tích phản hồi từ server."
+    elif res.status_code in (401, 403):
+        return f"❌ Lỗi xác thực (mã {res.status_code}). Kiểm tra API_KEY và quyền model."
+    else:
+        return f"❌ Lỗi API: mã {res.status_code}. Nội dung: {res.text[:300]}"
 
 # ==========================
-# 🧹 RESET INPUT SAU RERUN
+# 💾 KHỞI TẠO SESSION STATE
 # ==========================
+st.session_state.setdefault("logged_in", False)
+st.session_state.setdefault("user_info", {})
+st.session_state.setdefault("chat_history", [])
+# 'uploaded_file_widget' là key của widget file_uploader (Streamlit quản lý)
+st.session_state.setdefault("uploaded_file_widget", None)
+# 'uploaded_file' là object đã xử lý (do app gán/clear)
+st.session_state.setdefault("uploaded_file", None)
+st.session_state.setdefault("user_input", "")
+# flag để reset inputs *ở đầu* lần rerun
+st.session_state.setdefault("should_reset_input", False)
 
-if st.session_state["should_reset_input"]:
+# Nếu cờ reset bật -> thực hiện reset (phải làm ở đầu của mã để tuân policy)
+if st.session_state.get("should_reset_input", False):
     st.session_state["user_input"] = ""
+    # Không gán vào key widget; chỉ clear processed file
     st.session_state["uploaded_file"] = None
     st.session_state["should_reset_input"] = False
 
-
 # ==========================
-# 🔑 LOGIN
+# 🔑 ĐĂNG NHẬP
 # ==========================
-
 def handle_login(name, class_name):
     if not name or not class_name:
         st.error("⚠️ Vui lòng nhập đầy đủ thông tin.")
         return
-
     st.session_state["user_info"] = {"name": name, "class": class_name}
     st.session_state["logged_in"] = True
     st.session_state["chat_history"] = [
-        {"role": "assistant", "content": f"Chào {name} (Lớp {class_name})! Tôi là Gia sư ảo của bạn."}
+        {"role": "assistant", "content": f"Chào bạn, **{name} (Lớp {class_name})**! Tôi là Gia sư ảo."}
     ]
-
-    st.experimental_rerun()
+    # Không gọi st.experimental_rerun() — Streamlit sẽ rerun khi state thay đổi
 
 # ==========================
-# 💬 SUBMIT MESSAGE
+# 💬 GỬI TIN NHẮN
 # ==========================
-
 def submit_chat():
     text = st.session_state.get("user_input", "").strip()
-    file = st.session_state.get("uploaded_file")
+    # LẤY giá trị từ widget (không gán cho key này)
+    widget_file = st.session_state.get("uploaded_file_widget")  # this is the widget's value
 
-    if not text and not file:
+    if not text and not widget_file:
         return
 
     image_base64 = None
-    if file:
-        image_base64 = get_base64_image(file)
-        st.session_state["chat_history"].append({
-            "role": "user",
-            "content": f"Hình ảnh: {file.name}",
-            "image": file
-        })
+    # Nếu có tệp từ widget, lưu vào 'uploaded_file' (không trùng key widget) để app xử lý/clear
+    if widget_file:
+        try:
+            image_base64 = get_base64_image(widget_file)
+            st.session_state["uploaded_file"] = widget_file  # safe: no widget uses 'uploaded_file'
+            st.session_state["chat_history"].append({
+                "role": "user",
+                "content": f"📷 Hình ảnh: {getattr(widget_file, 'name', 'uploaded_image')}",
+                "image": widget_file
+            })
+        except Exception as e:
+            st.error(f"Lỗi xử lý hình ảnh: {e}")
+            return
 
     if text:
-        st.session_state["chat_history"].append({
-            "role": "user",
-            "content": text
-        })
+        st.session_state["chat_history"].append({"role": "user", "content": text})
 
-    with st.spinner("⏳ Đang suy nghĩ..."):
+    with st.spinner("⏳ Gia sư đang phân tích..."):
         reply = get_gemini_response(text, image_base64)
 
-    st.session_state["chat_history"].append({
-        "role": "assistant",
-        "content": reply
-    })
+    st.session_state["chat_history"].append({"role": "assistant", "content": reply})
 
-    # 👉 KHÔNG reset input ở đây — đưa về flag
+    # Set flag to reset inputs on next rerun (do not assign to widget key)
     st.session_state["should_reset_input"] = True
-
+    # IMPORTANT: we do NOT set st.session_state["uploaded_file_widget"] here (it's widget-managed)
 
 # ==========================
-# 💻 UI
+# 💻 GIAO DIỆN
 # ==========================
-
 st.set_page_config(page_title="Gia sư ảo", layout="centered")
 st.title("👨‍🏫 Gia Sư Ảo — Đề Tài Nghiên Cứu Khoa Học")
 st.markdown("---")
-
 
 def show_login():
     st.subheader("Đăng nhập để bắt đầu học")
@@ -200,36 +190,46 @@ def show_login():
         if st.form_submit_button("Bắt đầu"):
             handle_login(name, class_name)
 
-
 def show_chat():
-    user = st.session_state["user_info"]
-
-    st.subheader(f"Xin chào, {user['name']} (Lớp {user['class']}) ✨")
+    user = st.session_state.get("user_info", {"name": "Học sinh", "class": ""})
+    st.subheader(f"Xin chào, {user.get('name')} (Lớp {user.get('class')}) ✨")
     st.markdown("---")
 
     if st.button("Đăng xuất"):
         st.session_state["logged_in"] = False
         st.session_state["chat_history"] = []
-        st.experimental_rerun()
+        # Không set widget key; just return so page reruns naturally
+        return
 
-    chat_container = st.container()
-    with chat_container:
-        for msg in st.session_state["chat_history"]:
-            with st.chat_message(msg["role"]):
-                if "image" in msg:
-                    st.image(msg["image"], caption=msg["content"], width=250)
-                else:
-                    st.write(msg["content"])
+    # Hiển thị lịch sử chat
+    for msg in st.session_state.get("chat_history", []):
+        with st.chat_message(msg.get("role", "user")):
+            if "image" in msg:
+                try:
+                    st.image(msg["image"], caption=msg.get("content", ""), width=220)
+                except Exception:
+                    st.write(msg.get("content", ""))
+            else:
+                st.write(msg.get("content", ""))
 
-    st.file_uploader("Tải ảnh bài tập (tùy chọn)", type=["png", "jpg", "jpeg"], key="uploaded_file")
+    # NOTE: widget key = 'uploaded_file_widget' (we DON'T assign to that key anywhere)
+    st.file_uploader(
+        "Tải ảnh bài tập (tùy chọn)",
+        type=["png", "jpg", "jpeg"],
+        key="uploaded_file_widget",
+        accept_multiple_files=False
+    )
 
+    # Form nhập chat (clear_on_submit True giúp reset input widget on submit automatically)
     with st.form("chat_form", clear_on_submit=True):
-        st.text_input("Nhập câu hỏi", key="user_input")
+        st.text_input("Nhập câu hỏi", key="user_input", placeholder="Ví dụ: Giải phương trình...")
         if st.form_submit_button("Gửi"):
             submit_chat()
 
-
-if not st.session_state["logged_in"]:
+# ==========================
+# 🚀 RUN
+# ==========================
+if not st.session_state.get("logged_in", False):
     show_login()
 else:
     show_chat()
