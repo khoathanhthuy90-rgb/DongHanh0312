@@ -1,16 +1,13 @@
-from flask import Flask, render_template_string, request
+import streamlit as st
 import requests
 import uuid
-import time
 
 # ==============================
 # CONFIG
 # ==============================
 GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"
-API_KEY = ""   # <-- Điền API KEY vào đây
+API_KEY = ""  # <-- Nhập API KEY vào đây
 API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={API_KEY}"
-
-app = Flask(__name__)
 
 # ==============================
 # GEMINI API
@@ -32,73 +29,41 @@ def ask_gemini(prompt):
         if response.status_code == 200:
             data = response.json()
             return data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+
         return f"Lỗi API: {response.status_code}"
     except Exception as e:
         return f"Lỗi khi gọi API: {e}"
 
-
 # ==============================
-# HTML TEMPLATE (GIAO DIỆN WEB)
+# STREAMLIT APP
 # ==============================
-HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8" />
-    <title>Gia Sư Ảo Python</title>
-    <style>
-        body { font-family: Arial; background: #f3f3f3; padding: 20px; }
-        .box { width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
-        .msg-user { text-align: right; color: green; margin: 10px 0; }
-        .msg-ai { text-align: left; color: #333; margin: 10px 0; }
-        textarea { width: 100%; height: 80px; margin-top: 10px; }
-        button { padding: 10px 20px; margin-top: 10px; background: green; color: white; border: none; border-radius: 6px; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h2>💬 Gia Sư Ảo (Python Flask)</h2>
-        <form method="POST">
-            <label>Nhập câu hỏi:</label>
-            <textarea name="message" required>{{user_input}}</textarea>
-            <button type="submit">Gửi</button>
-        </form>
+st.set_page_config(page_title="Gia Sư Ảo", page_icon="💬", layout="centered")
 
-        {% if user_message %}
-            <p class="msg-user"><b>Bạn:</b> {{user_message}}</p>
-        {% endif %}
-        {% if ai_message %}
-            <p class="msg-ai"><b>Gia sư ảo:</b> {{ai_message}}</p>
-        {% endif %}
-    </div>
-</body>
-</html>
-"""
+st.title("💬 Gia Sư Ảo (Python + Streamlit)")
+st.caption("Chế độ an toàn – Không lưu trữ dữ liệu")
 
+# Tạo session lưu lịch sử
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# ==============================
-# ROUTES
-# ==============================
-@app.route("/", methods=["GET", "POST"])
-def home():
-    user_input = ""
-    user_message = ""
-    ai_message = ""
+# Hiển thị lịch sử chat
+for msg in st.session_state.messages:
+    role = "🟢 Bạn" if msg["role"] == "user" else "🤖 Gia sư ảo"
+    st.markdown(f"**{role}:** {msg['content']}")
 
-    if request.method == "POST":
-        user_input = request.form.get("message", "")
-        user_message = user_input
-        ai_message = ask_gemini(user_input)
+# Ô nhập
+user_input = st.text_area("Nhập câu hỏi của bạn:", "")
 
-    return render_template_string(HTML,
-                                  user_input=user_input,
-                                  user_message=user_message,
-                                  ai_message=ai_message)
+if st.button("Gửi"):
+    if user_input.strip() != "":
+        # Lưu tin nhắn user
+        st.session_state.messages.append({"role": "user", "content": user_input})
 
+        # Gọi API AI
+        ai_reply = ask_gemini(user_input)
 
-# ==============================
-# RUN APP
-# ==============================
-if __name__ == "__main__":
-    print("🔥 Server chạy tại: http://127.0.0.1:5000")
-    app.run(debug=True)
+        # Lưu phản hồi AI
+        st.session_state.messages.append({"role": "ai", "content": ai_reply})
+
+        # Clear input sau khi gửi
+        st.experimental_rerun()
