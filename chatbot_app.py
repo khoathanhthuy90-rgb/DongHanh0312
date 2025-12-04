@@ -12,7 +12,7 @@ from io import BytesIO
 GEMINI_MODEL = 'gemini-2.5-flash-preview-09-2025'
 # API_KEY KHÔNG ĐƯỢC DÙNG (để trống)
 # API Key sẽ được môi trường Streamlit Cloud/Canvas tự động cung cấp qua Header xác thực.
-API_KEY = "AIzaSyAoEtvqlW9V4pkYR1fQ0mfRhD-jWR4fNb8"
+API_KEY = ""
 # LOẠI BỎ QUERY PARAMETER "?key={API_KEY}" để xác thực qua môi trường
 API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
@@ -303,4 +303,5 @@ if not st.session_state.logged_in:
     show_login()
 else:
     show_chat()
+
 
