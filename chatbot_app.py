@@ -121,23 +121,37 @@ const App = () => {
         setInputMessage('');
         setIsTyping(true); 
         
-        // 2. Gọi API để lấy phản hồi của Gia sư ảo
-        const aiResponseText = await fetchGeminiResponse(userMessage);
+        try {
+            // 2. Gọi API để lấy phản hồi của Gia sư ảo
+            const aiResponseText = await fetchGeminiResponse(userMessage);
 
-        // 3. Hiển thị phản hồi của Gia sư ảo
-        const aiMessage = {
-            id: Date.now() + 1,
-            userId: 'Gemini-GiaSu', 
-            message: aiResponseText,
-            timestamp: Date.now() + 1
-        };
+            // 3. Hiển thị phản hồi của Gia sư ảo
+            const aiMessage = {
+                id: Date.now() + 1,
+                userId: 'Gemini-GiaSu', 
+                message: aiResponseText,
+                timestamp: Date.now() + 1
+            };
 
-        chatMessages.push(aiMessage);
-        setMessages([...chatMessages]);
-        
-        logActivity('SEND_MESSAGE_AI', { messageLength: aiResponseText.length });
+            chatMessages.push(aiMessage);
+            setMessages([...chatMessages]);
+            
+            logActivity('SEND_MESSAGE_AI', { messageLength: aiResponseText.length });
 
-        setIsTyping(false); 
+        } catch (error) {
+            console.error("Lỗi xử lý tin nhắn trong App component:", error);
+            const errorMessage = {
+                id: Date.now() + 1,
+                userId: 'System', 
+                message: 'Đã xảy ra lỗi nghiêm trọng. Không thể nhận phản hồi AI. Vui lòng kiểm tra console.',
+                timestamp: Date.now() + 1
+            };
+            chatMessages.push(errorMessage);
+            setMessages([...chatMessages]);
+        } finally {
+            // Đảm bảo trạng thái gõ được tắt trong mọi trường hợp
+            setIsTyping(false); 
+        }
     };
 
     // --- Giao Diện ---
