@@ -1,4 +1,4 @@
-# app.py (Minimal & Colorful UI)
+# app.py (Minimal & Colorful UI + Safe Update)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -122,6 +122,7 @@ st.markdown("<h4 style='text-align:center; color:#7f8c8d'>ĐỀ TÀI NGHIÊN C�
 # MAIN UI
 # --------------------------
 col_left, col_right = st.columns([3,2])
+
 with col_left:
     st.subheader("Nhập đề bài / câu hỏi")
     user_q = st.text_area("", value=st.session_state.get("user_input",""), height=150)
@@ -129,15 +130,17 @@ with col_left:
     btn_send = st.button("Gửi & Sinh ảnh")
 
     # Chat frame
-    st.markdown(
-        "<div style='border:2px solid #3498db; border-radius:10px; padding:10px; max-height:450px; overflow-y:auto; background:#ecf0f1;'>",
-        unsafe_allow_html=True
-    )
-    for m in st.session_state.chat_history[-20:]:
-        color = "#dff9fb" if m["role"]=="assistant" else "#fce4ec"
-        st.markdown(f"<div style='background:{color}; padding:8px; border-radius:8px; margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
-        if m.get("image"): st.image(m["image"], use_column_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    chat_container = st.empty()
+    with chat_container:
+        st.markdown(
+            "<div style='border:2px solid #3498db; border-radius:10px; padding:10px; max-height:450px; overflow-y:auto; background:#ecf0f1;'>",
+            unsafe_allow_html=True
+        )
+        for m in st.session_state.chat_history[-20:]:
+            color = "#dff9fb" if m["role"]=="assistant" else "#fce4ec"
+            st.markdown(f"<div style='background:{color}; padding:8px; border-radius:8px; margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
+            if m.get("image"): st.image(m["image"], use_column_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 with col_right:
     st.subheader("📂 Nhật ký ảnh")
@@ -146,23 +149,38 @@ with col_right:
         st.write(f"📝 {entry['question'][:50]}...")
 
 # --------------------------
-# ACTION: Send & Auto Image
+# ACTION: Send & Auto Image (SAFE)
 # --------------------------
 if btn_send and user_q.strip():
     with st.spinner("⏳ Đang tạo lời giải..."):
         answer_text, err = call_gemini_text(st.session_state.chosen_model, user_q)
-        if err: st.error(err); st.stop()
-    st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
-    st.session_state.chat_history.append({"role":"assistant","text":answer_text,"time":datetime.utcnow().isoformat()})
-    st.experimental_rerun()  # Reload để hiển thị chat mới
+        if err:
+            st.error(err)
+        else:
+            # lưu vào history
+            st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
+            st.session_state.chat_history.append({"role":"assistant","text":answer_text,"time":datetime.utcnow().isoformat()})
 
-    if tts_enabled: speak_text(answer_text)
+            if tts_enabled:
+                speak_text(answer_text)
 
-    # Sinh ảnh tự động
-    img_prompt = f"Educational illustration with style '{style}': {user_q}."
-    with st.spinner("🎨 Đang sinh ảnh minh họa..."):
-        img_b64, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
-    if not img_err:
-        st.session_state.chat_history[-1]["image"] = base64.b64decode(img_b64)
-        store_image_entry(user_q, img_b64, style)
-        st.experimental_rerun()
+            # tự động tạo ảnh minh họa
+            img_prompt = f"Educational illustration with style '{style}': {user_q}."
+            with st.spinner("🎨 Đang sinh ảnh minh họa..."):
+                img_b64, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
+            if not img_err:
+                st.session_state.chat_history[-1]["image"] = base64.b64decode(img_b64)
+                store_image_entry(user_q, img_b64, style)
+
+    # cập nhật chat trực tiếp
+    chat_container.empty()
+    with chat_container:
+        st.markdown(
+            "<div style='border:2px solid #3498db; border-radius:10px; padding:10px; max-height:450px; overflow-y:auto; background:#ecf0f1;'>",
+            unsafe_allow_html=True
+        )
+        for m in st.session_state.chat_history[-20:]:
+            color = "#dff9fb" if m["role"]=="assistant" else "#fce4ec"
+            st.markdown(f"<div style='background:{color}; padding:8px; border-radius:8px; margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
+            if m.get("image"): st.image(m["image"], use_column_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
