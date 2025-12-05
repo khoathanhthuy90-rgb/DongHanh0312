@@ -56,5 +56,9 @@ tzdata
 urllib3==2.5.0
 watchdog==6.0.0
 firebase-admin
+streamlit
+requests
+gtts
+
 
 
