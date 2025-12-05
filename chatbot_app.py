@@ -6,7 +6,7 @@ import base64
 # ĐỌC API KEY
 # ==============================
 if "API_KEY" not in st.secrets:
-    st.error("❌ Missing API_KEY in secrets.toml")
+    st.error("❌ Missing API_KEY in secrets.toml. Vui lòng tạo file .streamlit/secrets.toml với nội dung:\n\nAPI_KEY = \"YOUR_KEY_HERE\"")
     st.stop()
 
 API_KEY = st.secrets["API_KEY"]
