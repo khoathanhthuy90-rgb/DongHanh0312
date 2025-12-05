@@ -1,4 +1,4 @@
-# app.py (Professional UI + Login)
+# app.py (Professional UI + Chat Frame + Subtitle)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -40,7 +40,7 @@ if "user_class" not in st.session_state: st.session_state.user_class = ""
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("<h1 style='text-align:center; color:#1f4e79'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align:center; color:gray'>ĐĂNG NHẬP TRƯỚC KHI SỬ DỤNG</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align:center; color:gray'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>", unsafe_allow_html=True)
     col1, col2 = st.columns([1,1])
     with col1: name_input = st.text_input("Họ và tên")
     with col2: class_input = st.text_input("Lớp")
@@ -129,12 +129,17 @@ with col_left:
     st.session_state.user_input = user_q
     btn_send = st.button("Gửi & Sinh ảnh")
 
+    # Chat frame
+    st.markdown("<div style='border:2px solid #1f4e79; border-radius:10px; padding:10px; max-height:400px; overflow-y:auto;'>", unsafe_allow_html=True)
+    if st.session_state.chat_history:
+        for m in st.session_state.chat_history[-20:]:
+            role_color = "#d1e7dd" if m["role"]=="assistant" else "#f8d7da"
+            st.markdown(f"<div style='background:{role_color};padding:8px;border-radius:5px;margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
+            if m.get("image"):
+                st.image(m["image"], use_column_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
 with col_right:
-    with st.expander("💬 Nhật ký nhanh"):
-        if st.session_state.chat_history:
-            for m in st.session_state.chat_history[-10:]:
-                role_color = "#d1e7dd" if m["role"]=="assistant" else "#f8d7da"
-                st.markdown(f"<div style='background:{role_color};padding:10px;border-radius:8px;margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
     with st.expander("📂 Nhật ký ảnh"):
         if st.session_state.image_history:
             for entry in reversed(st.session_state.image_history[-6:]):
@@ -150,7 +155,8 @@ if btn_send and user_q.strip():
         if err: st.error(err); st.stop()
     st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
     st.session_state.chat_history.append({"role":"assistant","text":answer_text,"time":datetime.utcnow().isoformat()})
-    st.markdown(f"### 📘 Lời giải\n{answer_text}")
+    st.experimental_rerun()  # Reload để hiển thị chat mới
+
     if tts_enabled: speak_text(answer_text)
 
     # Sinh ảnh tự động
@@ -160,7 +166,6 @@ if btn_send and user_q.strip():
     if img_err:
         st.warning("Không tạo được ảnh: " + img_err)
     else:
-        store_image_entry(user_q, img_b64, style)
-        st.image(base64.b64decode(img_b64), use_column_width=True)
-        st.download_button("📥 Tải ảnh minh họa", data=base64.b64decode(img_b64), file_name="minh_hoa.png", mime="image/png")
         st.session_state.chat_history[-1]["image"] = base64.b64decode(img_b64)
+        store_image_entry(user_q, img_b64, style)
+        st.experimental_rerun()
