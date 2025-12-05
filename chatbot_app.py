@@ -1,100 +1,46 @@
 import streamlit as st
 import requests
-import base64
+import time
+import json
 
-# --------------------------
-# SETTINGS
-# --------------------------
-st.set_page_config(
-    page_title="Gia Sư Ảo",
-    layout="centered"
-)
+# --- CONFIG ---
+# API Key must exist in .streamlit/secrets.toml
+API_KEY = st.secrets.get("API_KEY", None)
+MODEL = "gemini-2.5-flash-preview-09-2025"
 
-API_KEY = st.secrets["API_KEY"]
-MODEL = "gemini-2.0-flash"
+if not API_KEY:
+    st.error("❌ Missing API_KEY in secrets. Please add it to .streamlit/secrets.toml")
+    st.stop()
 
-TEXT_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
+API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
-# --------------------------
-# HISTORY
-# --------------------------
-if "history" not in st.session_state:
-    st.session_state.history = []
+# --- UI ---
+st.title("Chatbot Gemini bằng Streamlit")
+user_input = st.text_area("Nhập nội dung:")
+btn = st.button("Gửi")
 
-# --------------------------
-# CALL GEMINI TEXT + IMAGE
-# --------------------------
-def call_gemini(prompt):
-    body = { "contents": [{ "role": "user", "parts": [{ "text": prompt }]}] }
+# --- CALL API ---
+def call_gemini(text):
+    payload = {
+        "contents": [
+            {"parts": [{"text": text}]}
+        ]
+    }
+    headers = {"Content-Type": "application/json"}
 
-    res = requests.post(TEXT_URL, json=body)
+    response = requests.post(API_URL, headers=headers, json=payload)
+    if response.status_code != 200:
+        return f"❌ Lỗi API: {response.status_code} - {response.text}"
 
-    if res.status_code != 200:
-        return None, None, f"❌ API lỗi {res.status_code}: {res.text[:200]}"
-
-    data = res.json()
-
-    txt = None
-    img = None
-
+    data = response.json()
     try:
-        parts = data["candidates"][0]["content"]["parts"]
-        for p in parts:
-            if "text" in p:
-                txt = p["text"]
-            if "media" in p:
-                img = base64.b64decode(p["media"]["data"])
-    except Exception as e:
-        return None, None, f"❌ Lỗi đọc dữ liệu: {e}"
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except:
+        return "⚠️ Không đọc được phản hồi từ API."
 
-    return txt, img, None
-
-
-# --------------------------
-# UI TITLE
-# --------------------------
-st.markdown("<h1 style='text-align:center;'>🤖 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center; margin-top:-10px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</p>", unsafe_allow_html=True)
-st.markdown("---")
-
-# --------------------------
-# INPUT
-# --------------------------
-user_msg = st.text_area("Nhập câu hỏi:", height=120)
-auto_image = st.checkbox("🎨 Tự sinh ảnh minh họa", value=True)
-
-if st.button("Gửi") and user_msg.strip() != "":
-    
-    # prompt chung
-    full_prompt = (
-        f"Trả lời rõ ràng cho học sinh THCS. "
-        f"Nếu có thể, sinh ảnh minh họa phù hợp. "
-        f"Đề bài: {user_msg}"
-    )
-
-    with st.spinner("⏳ Đang xử lý..."):
-        text, image, err = call_gemini(full_prompt)
-
-    if err:
-        st.error(err)
-    else:
-        # lưu lịch sử
-        st.session_state.history.append({"q": user_msg, "a": text, "img": image})
-
-    st.rerun()
-
-# --------------------------
-# SHOW HISTORY
-# --------------------------
-if st.session_state.history:
-    st.markdown("## 📝 Lịch sử trao đổi")
-
-    for item in reversed(st.session_state.history):
-        st.markdown(f"**📌 Bạn:** {item['q']}")
-        st.markdown(f"**🤖 Trả lời:** {item['a']}")
-
-        if item["img"] is not None:
-            st.image(item["img"], use_column_width=True)
-            st.download_button("📥 Tải ảnh minh họa", item["img"], file_name="minh_hoa.png")
-
-        st.markdown("---")
+# --- HANDLE ---
+if btn and user_input.strip():
+    with st.spinner("Đang xử lý..."):
+        reply = call_gemini(user_input)
+        st.write("### 🤖 Trả lời:")
+        st.write(reply)
