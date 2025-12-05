@@ -1,118 +1,138 @@
-# GIA SƯ ẢO CỦA BẠN
-# ĐỀ TÀI NGHIÊN CỨU KHOA HỌC (nhỏ dưới tiêu đề)
-
 import streamlit as st
 import requests
 import base64
-import time
 
-# =======================
+# -----------------------------
 # CONFIG
-# =======================
-API_KEY = st.secrets.get("API_KEY", None)
-MODEL_NAME = "gemini-2.0-flash-lite-preview"  # model hỗ trợ sinh ảnh
-
-if not API_KEY:
-    st.error("Thiếu API_KEY trong secrets.toml")
-    st.stop()
-
-# =======================
-# PAGE UI
-# =======================
+# -----------------------------
 st.set_page_config(page_title="Gia Sư Ảo", page_icon="🤖", layout="centered")
+API_KEY = st.secrets["API_KEY"]
+MODEL_NAME = "gemini-2.0-flash"
 
+# -----------------------------
+# STYLE – Messenger UI
+# -----------------------------
 st.markdown(
     """
-    <h1 style="text-align:center;">🤖 GIA SƯ ẢO CỦA BẠN</h1>
-    <p style="text-align:center; font-size:18px; color:#666; margin-top:-12px;">
-        ĐỀ TÀI NGHIÊN CỨU KHOA HỌC
-    </p>
-    <hr>
+    <style>
+        body { background-color: #f0f2f5; }
+        .title-main { text-align:center; font-size:36px; font-weight:700; margin-bottom: -10px; }
+        .title-sub { text-align:center; font-size:18px; color:#666; margin-bottom:30px; }
+
+        .chat-container {
+            width: 100%;
+            max-width: 650px;
+            margin: auto;
+        }
+        .bubble-user {
+            background: #0084ff;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 18px 18px 0 18px;
+            margin: 10px 0;
+            max-width: 75%;
+            float: right;
+            clear: both;
+        }
+        .bubble-bot {
+            background: #e4e6eb;
+            padding: 12px 16px;
+            border-radius: 18px 18px 18px 0;
+            margin: 10px 0;
+            max-width: 75%;
+            float: left;
+            clear: both;
+        }
+        .avatar-user, .avatar-bot {
+            width: 38px; height: 38px;
+            border-radius: 50%;
+            margin: 5px;
+        }
+        .row { display:flex; align-items: flex-end; }
+    </style>
     """,
     unsafe_allow_html=True,
 )
 
-# =======================
-# Lưu lịch sử (text + image luôn đi kèm)
-# =======================
+# -----------------------------
+# SESSION STATE
+# -----------------------------
 if "history" not in st.session_state:
-    st.session_state.history = []  # mỗi entry: {"q":..., "a":..., "img":...}
+    st.session_state.history = []
 
-# =======================
-# API TEXT
-# =======================
-def call_gemini_text(prompt):
+# -----------------------------
+# CALL GEMINI TEXT
+# -----------------------------
+def gen_text(prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
-    body = {
-        "contents": [
-            {"role": "user", "parts": [{"text": prompt}]}    
-        ]
-    }
-    r = requests.post(url, json=body)
-    if r.status_code != 200:
-        return f"❌ Lỗi API Text {r.status_code}: {r.text[:200]}"
+    body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+    res = requests.post(url, json=body)
     try:
-        data = r.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        return res.json()["candidates"][0]["content"]["parts"][0]["text"]
     except:
-        return "❌ Không đọc được kết quả văn bản"
+        return "❌ Lỗi: Không đọc được phản hồi AI"
 
-# =======================
-# API IMAGE
-# =======================
-def call_gemini_image(prompt):
+# -----------------------------
+# CALL GEMINI IMAGE
+# -----------------------------
+def gen_image(prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
-    body = {
-        "contents": [
-            {"role": "user", "parts": [{"text": prompt}]}    
-        ]
-    }
-    r = requests.post(url, json=body)
-    if r.status_code != 200:
-        return None, f"❌ Lỗi API Ảnh {r.status_code}: {r.text[:200]}"
+    body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+    res = requests.post(url, json=body)
+    data = res.json()
     try:
-        parts = r.json()["candidates"][0]["content"]["parts"]
+        parts = data["candidates"][0]["content"]["parts"]
         for p in parts:
             if "media" in p:
-                return p["media"]["data"], None
-        return None, "❌ Không tìm thấy ảnh trong phản hồi"
-    except Exception as e:
-        return None, f"❌ Lỗi đọc dữ liệu ảnh: {e}"
+                return base64.b64decode(p["media"]["data"])
+        return None
+    except:
+        return None
 
-# =======================
-# INPUT
-# =======================
-user_q = st.text_area("Nhập câu hỏi của bạn:")
+# -----------------------------
+# TITLES
+# -----------------------------
+st.markdown("<div class='title-main'>GIA SƯ ẢO CỦA BẠN</div>", unsafe_allow_html=True)
+st.markdown("<div class='title-sub'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</div>", unsafe_allow_html=True)
 
-if st.button("Gửi câu hỏi") and user_q.strip():
-    with st.spinner("Đang tạo lời giải..."):
-        answer = call_gemini_text(user_q)
+st.markdown("<div class='chat-container'>", unsafe_allow_html=True)
 
-    with st.spinner("Đang tạo ảnh minh họa..."):
-        img_data, err = call_gemini_image(f"Hãy tạo hình minh họa rõ ràng cho bài toán: {user_q}")
-
-    if err:
-        st.warning(err)
-        img_bytes = None
+# -----------------------------
+# SHOW HISTORY (Messenger style)
+# -----------------------------
+for msg in st.session_state.history:
+    if msg["role"] == "user":
+        st.markdown(
+            f"<div class='row' style='justify-content:right;'>"
+            f"<div class='bubble-user'>{msg['text']}</div>"
+            f"<img class='avatar-user' src='https://i.imgur.com/3XjA1Qp.png'>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
     else:
-        img_bytes = base64.b64decode(img_data)
+        st.markdown(
+            f"<div class='row' style='justify-content:left;'>"
+            f"<img class='avatar-bot' src='https://i.imgur.com/6Z7N7wO.png'>"
+            f"<div class='bubble-bot'>{msg['text']}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        if msg.get("image"):
+            st.image(msg["image"], caption="Ảnh minh họa AI tạo")
 
-    st.session_state.history.append({
-        "q": user_q,
-        "a": answer,
-        "img": img_bytes
-    })
+# -----------------------------
+# INPUT + BUTTON
+# -----------------------------
+user_input = st.text_input("Nhập câu hỏi…")
 
+if st.button("Gửi") and user_input.strip() != "":
+    st.session_state.history.append({"role": "user", "text": user_input})
+
+    with st.spinner("AI đang trả lời…"):
+        text = gen_text(user_input)
+        img = gen_image(f"Hãy tạo ảnh minh họa rõ ràng, đẹp, đúng chủ đề: {user_input}")
+
+    st.session_state.history.append({"role": "assistant", "text": text, "image": img})
     st.rerun()
 
-# =======================
-# HIỂN THỊ LỊCH SỬ — SẠCH, GỌN, CHỈ TEXT + ẢNH
-# =======================
-st.subheader("📘 Lịch sử trao đổi")
-for item in reversed(st.session_state.history):
-    st.markdown(f"**🧑‍🎓 Câu hỏi:** {item['q']}")
-    st.markdown(f"**🤖 Trả lời:** {item['a']}")
-    if item["img"]:
-        st.image(item["img"], caption="Ảnh minh họa AI tạo", use_column_width=True)
-        st.download_button("Tải ảnh minh họa", item["img"], "minh_hoa.png")
-    st.markdown("<hr>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
