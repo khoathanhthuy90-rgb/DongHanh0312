@@ -1,4 +1,4 @@
-# app.py (Professional UI + Chat Frame + Subtitle)
+# app.py (Minimal & Colorful UI)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -12,8 +12,8 @@ if not API_KEY:
     st.stop()
 
 MODEL_OPTIONS = {
-    "Gemini 2.0 Flash (nhanh)": "gemini-2.0-flash",
-    "Gemini 2.0 Pro (mạnh)": "gemini-2.0-pro-exp",
+    "Gemini 2.0 Flash": "gemini-2.0-flash",
+    "Gemini 2.0 Pro": "gemini-2.0-pro-exp",
     "Gemini 1.5 Flash": "gemini-1.5-flash"
 }
 
@@ -23,7 +23,7 @@ STYLE_PROMPT_MAP = {
     "Gia sư trẻ trung": "young friendly tutor, smiling, colorful, modern, cartoon-realistic style"
 }
 
-st.set_page_config(page_title="Gia Sư Ảo – Minh họa", layout="wide", page_icon="🤖")
+st.set_page_config(page_title="Gia Sư Ảo", layout="wide", page_icon="🤖")
 
 # --------------------------
 # SESSION INIT
@@ -39,8 +39,8 @@ if "user_class" not in st.session_state: st.session_state.user_class = ""
 # LOGIN
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
-    st.markdown("<h1 style='text-align:center; color:#1f4e79'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align:center; color:gray'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center; color:#2c3e50'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align:center; color:#7f8c8d'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>", unsafe_allow_html=True)
     col1, col2 = st.columns([1,1])
     with col1: name_input = st.text_input("Họ và tên")
     with col2: class_input = st.text_input("Lớp")
@@ -50,7 +50,7 @@ if not st.session_state.user_name or not st.session_state.user_class:
             st.session_state.user_class = class_input.strip()
             st.success(f"Chào {st.session_state.user_name} - Lớp {st.session_state.user_class}! Bạn có thể bắt đầu hỏi bài.")
         else:
-            st.warning("Vui lòng nhập đủ Họ tên và Lớp trước khi đăng nhập.")
+            st.warning("Vui lòng nhập đủ Họ tên và Lớp.")
     st.stop()
 
 # --------------------------
@@ -115,9 +115,8 @@ with st.sidebar:
 # --------------------------
 # HEADER
 # --------------------------
-st.markdown("<h1 style='text-align:center; color:#1f4e79'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align:center; color:gray'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>", unsafe_allow_html=True)
-st.image("https://images.unsplash.com/photo-1596496053414-8c6a4d3b8927?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=400", width=200)
+st.markdown("<h1 style='text-align:center; color:#2c3e50'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align:center; color:#7f8c8d'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>", unsafe_allow_html=True)
 
 # --------------------------
 # MAIN UI
@@ -125,26 +124,26 @@ st.image("https://images.unsplash.com/photo-1596496053414-8c6a4d3b8927?crop=entr
 col_left, col_right = st.columns([3,2])
 with col_left:
     st.subheader("Nhập đề bài / câu hỏi")
-    user_q = st.text_area("Nhập đề bài hoặc câu hỏi:", value=st.session_state.get("user_input",""), height=160)
+    user_q = st.text_area("", value=st.session_state.get("user_input",""), height=150)
     st.session_state.user_input = user_q
     btn_send = st.button("Gửi & Sinh ảnh")
 
     # Chat frame
-    st.markdown("<div style='border:2px solid #1f4e79; border-radius:10px; padding:10px; max-height:400px; overflow-y:auto;'>", unsafe_allow_html=True)
-    if st.session_state.chat_history:
-        for m in st.session_state.chat_history[-20:]:
-            role_color = "#d1e7dd" if m["role"]=="assistant" else "#f8d7da"
-            st.markdown(f"<div style='background:{role_color};padding:8px;border-radius:5px;margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
-            if m.get("image"):
-                st.image(m["image"], use_column_width=True)
+    st.markdown(
+        "<div style='border:2px solid #3498db; border-radius:10px; padding:10px; max-height:450px; overflow-y:auto; background:#ecf0f1;'>",
+        unsafe_allow_html=True
+    )
+    for m in st.session_state.chat_history[-20:]:
+        color = "#dff9fb" if m["role"]=="assistant" else "#fce4ec"
+        st.markdown(f"<div style='background:{color}; padding:8px; border-radius:8px; margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
+        if m.get("image"): st.image(m["image"], use_column_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 with col_right:
-    with st.expander("📂 Nhật ký ảnh"):
-        if st.session_state.image_history:
-            for entry in reversed(st.session_state.image_history[-6:]):
-                st.image(base64.b64decode(entry["b64"]), width=160)
-                st.write(f"📝 {entry['question'][:80]}...")
+    st.subheader("📂 Nhật ký ảnh")
+    for entry in reversed(st.session_state.image_history[-6:]):
+        st.image(base64.b64decode(entry["b64"]), width=160)
+        st.write(f"📝 {entry['question'][:50]}...")
 
 # --------------------------
 # ACTION: Send & Auto Image
@@ -163,9 +162,7 @@ if btn_send and user_q.strip():
     img_prompt = f"Educational illustration with style '{style}': {user_q}."
     with st.spinner("🎨 Đang sinh ảnh minh họa..."):
         img_b64, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
-    if img_err:
-        st.warning("Không tạo được ảnh: " + img_err)
-    else:
+    if not img_err:
         st.session_state.chat_history[-1]["image"] = base64.b64decode(img_b64)
         store_image_entry(user_q, img_b64, style)
         st.experimental_rerun()
