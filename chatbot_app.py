@@ -1,153 +1,165 @@
 import streamlit as st
 import requests
 import base64
-import io
-from gtts import gTTS
 
-# ======================================================
-# ⚙️ CẤU HÌNH
-# ======================================================
-GEMINI_MODEL = "gemini-2.0-flash"
-IMAGE_MODEL = "gemini-2.0-flash"     # Model hỗ trợ sinh ảnh
-API_KEY = st.secrets["GEMINI_API_KEY"]
+# ==========================
+# ⚙️ CẤU HÌNH API
+# ==========================
+GEMINI_TEXT_MODEL = "gemini-2.0-flash"
+GEMINI_IMAGE_MODEL = "gemini-2.0-flash"  # flash hỗ trợ generateImage
 
-TEXT_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={API_KEY}"
-IMAGE_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{IMAGE_MODEL}:generateImage?key={API_KEY}"
+try:
+    API_KEY = st.secrets["GEMINI_API_KEY"]
+except:
+    API_KEY = None
+
+if not API_KEY:
+    st.error("⚠️ Thiếu GEMINI_API_KEY trong file secrets.toml")
+    st.stop()
+
+TEXT_API_URL = (
+    f"https://generativelanguage.googleapis.com/v1/models/"
+    f"{GEMINI_TEXT_MODEL}:generateContent?key={API_KEY}"
+)
+
+IMAGE_API_URL = (
+    f"https://generativelanguage.googleapis.com/v1/models/"
+    f"{GEMINI_IMAGE_MODEL}:generateImage?key={API_KEY}"
+)
 
 SYSTEM_INSTRUCTION = (
-    "Bạn là Gia sư ảo thân thiện. Giải bài thật dễ hiểu cho học sinh cấp 2–3. "
-    "Nếu học sinh chọn chế độ 'giải chi tiết', hãy giải từng bước."
+    "Bạn là Gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3, "
+    "giải thích dễ hiểu, dùng LaTeX khi cần."
 )
 
-# ======================================================
-# 📌 HÀM GỌI GEMINI SINH VĂN BẢN
-# ======================================================
-def ask_gemini(prompt):
+# ==========================
+# 🧩 IMAGE ENCODER
+# ==========================
+def get_base64_image(file):
+    if file is None:
+        return None
+    return base64.b64encode(file.getvalue()).decode("utf-8")
+
+# ==========================
+# 🖼️ API TẠO ẢNH
+# ==========================
+def generate_image(prompt):
+    payload = { "prompt": { "text": prompt } }
+
+    res = requests.post(IMAGE_API_URL, json=payload)
+
+    if res.status_code != 200:
+        return None, f"❌ Lỗi ảnh: {res.text}"
+
+    data = res.json()
+
+    try:
+        img_b64 = data["generatedImages"][0]["image"]["imageBytes"]
+        return img_b64, None
+    except:
+        return None, f"❌ API không trả về ảnh: {data}"
+
+# ==========================
+# 🤖 API TEXT
+# ==========================
+def get_gemini_text(prompt, image_b64=None, has_image=False):
+
+    content_parts = [{"text": prompt}]
+    if has_image:
+        content_parts.insert(0, {
+            "inlineData": {
+                "mimeType": "image/jpeg",
+                "data": image_b64
+            }
+        })
+
     payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": SYSTEM_INSTRUCTION}]
+            },
+            {
+                "role": "user",
+                "parts": content_parts
+            }
+        ]
     }
 
-    res = requests.post(TEXT_URL, json=payload)
-    text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-    return text
+    res = requests.post(TEXT_API_URL, json=payload)
 
-# ======================================================
-# 🖼️ HÀM GỌI GEMINI SINH ẢNH MINH HỌA
-# ======================================================
-def generate_image(instruction):
-    payload = {
-        "prompt": {
-            "text": instruction
-        }
-    }
+    if res.status_code != 200:
+        return f"❌ Lỗi văn bản: {res.text}"
 
-    res = requests.post(IMAGE_URL, json=payload)
-    img_data = res.json()["image"]["imageBytes"]
+    try:
+        return res.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except:
+        return "❌ Lỗi phân tích phản hồi từ API."
 
-    return base64.b64decode(img_data)
+# ==========================
+# 💾 SESSION
+# ==========================
+st.session_state.setdefault("messages", [])
 
-# ======================================================
-# 🔊 TẠO GIỌNG NÓI
-# ======================================================
-def text_to_speech(text):
-    tts = gTTS(text, lang="vi")
-    fp = io.BytesIO()
-    tts.write_to_fp(fp)
-    fp.seek(0)
-    return fp
+# ==========================
+# 💬 CHAT UI
+# ==========================
+st.set_page_config(page_title="Gia sư ảo NCKH")
 
-# ======================================================
-# 💾 LỊCH SỬ
-# ======================================================
-if "history" not in st.session_state:
-    st.session_state.history = []
+st.title("👨‍🏫 Gia Sư Ảo – Tích hợp AI & Sinh ảnh minh họa")
 
-# ======================================================
-# 🎨 GIAO DIỆN
-# ======================================================
-st.set_page_config(page_title="Gia Sư Ảo NCKH", layout="centered")
+uploaded_img = st.file_uploader("📷 Gửi ảnh bài toán (nếu có)", type=["png","jpg","jpeg"])
 
-st.title("👨‍🏫 Gia Sư Ảo – Chatbot AI hỗ trợ tự học")
-st.markdown("### ✨ Đề tài NCKH: *Chatbot AI – Gia sư ảo hỗ trợ học sinh tự học*")
+user_input = st.text_input("Nhập câu hỏi của bạn...")
 
-# Chọn chế độ
-mode = st.radio(
-    "Chọn chế độ giải bài:",
-    ["Giải nhanh", "Giải chi tiết", "Gợi mở (không cho đáp án)"]
-)
+col1, col2 = st.columns([1,1])
+with col1:
+    btn_send = st.button("Gửi")
+with col2:
+    btn_image = st.button("🖼️ Sinh ảnh minh họa")
 
-question = st.text_area("Nhập bài toán:")
+# ==========================
+# ⚙️ GỬI TIN NHẮN
+# ==========================
+if btn_send and (user_input or uploaded_img):
 
-if st.button("Giải bài 🚀"):
-    if not question.strip():
-        st.error("Vui lòng nhập bài!")
-        st.stop()
+    img_b64 = get_base64_image(uploaded_img)
+    has_image = uploaded_img is not None
 
-    # Tạo prompt theo chế độ
-    if mode == "Giải nhanh":
-        prompt = f"{SYSTEM_INSTRUCTION}\n\nHãy giải nhanh bài toán sau:\n{question}"
-    elif mode == "Giải chi tiết":
-        prompt = f"{SYSTEM_INSTRUCTION}\n\nHãy giải bài toán thật chi tiết từng bước:\n{question}"
-    else:
-        prompt = f"{SYSTEM_INSTRUCTION}\nKhông đưa đáp án cuối. Hãy gợi mở từng bước để học sinh tự làm:\n{question}"
+    # Lưu message user
+    st.session_state.messages.append(("user", user_input))
 
-    # -----------------------------
-    # 🧠 AI trả lời
-    # -----------------------------
-    answer = ask_gemini(prompt)
+    # Gọi AI trả lời text
+    answer = get_gemini_text(user_input, img_b64, has_image)
 
-    # -----------------------------
-    # 🖼️ AI tạo ảnh minh họa
-    # -----------------------------
-    img_prompt = f"Tạo một ảnh infographic minh họa đẹp, sắc nét, phong cách giáo dục, mô tả bài toán sau: {question}"
-    img_bytes = generate_image(img_prompt)
+    st.session_state.messages.append(("bot", answer))
 
-    # -----------------------------
-    # 🔊 Tạo giọng nói
-    # -----------------------------
-    audio_file = text_to_speech(answer)
-
-    # -----------------------------
-    # 💾 Lưu vào lịch sử
-    # -----------------------------
-    st.session_state.history.append({
-        "question": question,
-        "answer": answer,
-        "image": img_bytes
-    })
-
-    # -----------------------------
-    # 📌 HIỂN THỊ KẾT QUẢ
-    # -----------------------------
-    st.subheader("📘 Lời giải:")
-    st.markdown(answer)
-
-    st.subheader("🖼️ Ảnh minh họa:")
-    st.image(img_bytes, use_column_width=True)
-
-    st.subheader("🔊 Giọng đọc lời giải:")
-    st.audio(audio_file, format="audio/mp3")
-
-    # Tải ảnh
-    st.download_button(
-        label="📥 Tải ảnh minh họa",
-        data=img_bytes,
-        file_name="minh_hoa.png",
-        mime="image/png"
+# ==========================
+# ⚙️ SINH ẢNH MINH HOẠ
+# ==========================
+if btn_image and user_input:
+    img_b64, err = generate_image(
+        f"Minh hoạ trực quan cho bài toán: {user_input}. Phong cách đơn giản, rõ ràng."
     )
 
-# ======================================================
-# 📚 LỊCH SỬ
-# ======================================================
-st.markdown("---")
-st.header("📂 Lịch sử đã giải")
+    if img_b64:
+        st.session_state.messages.append(("bot_img", img_b64))
+    else:
+        st.session_state.messages.append(("bot", err))
 
-for i, entry in enumerate(st.session_state.history[::-1]):
-    st.markdown(f"### 📝 Bài {len(st.session_state.history)-i}")
-    st.write("**Đề bài:**", entry["question"])
-    st.write("**Lời giải:**")
-    st.markdown(entry["answer"])
-    st.image(entry["image"], caption="Ảnh minh họa")
-    st.markdown("---")
+# ==========================
+# 📜 HIỂN THỊ LỊCH SỬ CHAT
+# ==========================
+st.markdown("---")
+
+for role, msg in st.session_state.messages:
+    if role == "user":
+        st.markdown(f"🧑‍🎓 **Bạn:** {msg}")
+
+    elif role == "bot":
+        st.markdown(f"🤖 **Gia sư ảo:** {msg}")
+
+    elif role == "bot_img":
+        st.markdown("🖼️ **Ảnh minh họa:**")
+        st.image(base64.b64decode(msg), use_column_width=True)
+
