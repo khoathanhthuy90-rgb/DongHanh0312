@@ -1,4 +1,4 @@
-# app_gia_su_ao_full.py
+# app_gia_su_ao_v1beta.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -62,24 +62,34 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # HELPERS
 # --------------------------
 def call_gemini_text(model, user_prompt, image_b64_inline=None):
-    """Gọi API Gemini generateText"""
+    """
+    Gọi Gemini API generateText chuẩn v1beta.
+    """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
-    prompt = [
-        {"role": "system", "content": [{"type": "text", "text": SYSTEM_INSTRUCTION}]},
-        {"role": "user", "content": [{"type": "text", "text": user_prompt}]}
+    
+    # Cấu trúc input chuẩn
+    instances_input = [
+        {
+            "input": [
+                {"role": "system", "content": SYSTEM_INSTRUCTION},
+                {"role": "user", "content": user_prompt}
+            ]
+        }
     ]
     if image_b64_inline:
-        prompt.append({
-            "role": "user",
-            "content": [{"type": "image", "image": {"mimeType": "image/png", "data": image_b64_inline}}]
+        instances_input[0]["input"].append({
+            "role":"user",
+            "content": {"type":"image", "image":{"mimeType":"image/png","data":image_b64_inline}}
         })
-    payload = {"prompt": prompt, "temperature": 0.2, "candidate_count": 1}
+
+    payload = {"instances": instances_input, "parameters":{"temperature":0.2,"candidateCount":1}}
+
     try:
         res = requests.post(url, json=payload, timeout=45)
         if res.status_code != 200:
             return None, f"API trả lỗi {res.status_code}: {res.text[:300]}"
         data = res.json()
-        answer_text = data["candidates"][0]["content"][0]["text"]
+        answer_text = data["predictions"][0]["content"][0]["text"]
         return answer_text, None
     except Exception as e:
         return None, f"Lỗi kết nối/gọi API: {str(e)}"
@@ -123,11 +133,6 @@ with st.sidebar:
     st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
-
-# --------------------------
-# HEADER
-# --------------------------
-st.markdown("<hr>", unsafe_allow_html=True)
 
 # --------------------------
 # MAIN UI
