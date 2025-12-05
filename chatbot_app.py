@@ -1,4 +1,4 @@
-# app_full_professional.py
+# app_gia_su_ao_full.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -39,7 +39,6 @@ for key in ["chat_history","image_history","user_input","chosen_model","user_nam
 # LOGIN
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
-    # Header với ảnh gia sư
     st.markdown("""
         <div style="text-align:center;">
             <img src="https://i.imgur.com/4AiXzf8.png" width="120" style="border-radius:50%;"/>
@@ -62,24 +61,31 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # --------------------------
 # HELPERS
 # --------------------------
-def text_api_url(model): return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-
 def call_gemini_text(model, user_prompt, image_b64_inline=None):
-    url = text_api_url(model)
-    contents = [{"role":"user","parts":[{"text":SYSTEM_INSTRUCTION}]}]
-    parts = []
-    if image_b64_inline: parts.append({"inlineData":{"mimeType":"image/png","data":image_b64_inline}})
-    parts.append({"text": user_prompt})
-    contents.append({"role":"user","parts":parts})
+    """Gọi API Gemini generateText"""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
+    prompt = [
+        {"role": "system", "content": [{"type": "text", "text": SYSTEM_INSTRUCTION}]},
+        {"role": "user", "content": [{"type": "text", "text": user_prompt}]}
+    ]
+    if image_b64_inline:
+        prompt.append({
+            "role": "user",
+            "content": [{"type": "image", "image": {"mimeType": "image/png", "data": image_b64_inline}}]
+        })
+    payload = {"prompt": prompt, "temperature": 0.2, "candidate_count": 1}
     try:
-        res = requests.post(url, json={"contents":contents}, timeout=45)
+        res = requests.post(url, json=payload, timeout=45)
+        if res.status_code != 200:
+            return None, f"API trả lỗi {res.status_code}: {res.text[:300]}"
         data = res.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"], None
+        answer_text = data["candidates"][0]["content"][0]["text"]
+        return answer_text, None
     except Exception as e:
-        return None, str(e)
+        return None, f"Lỗi kết nối/gọi API: {str(e)}"
 
 def call_gemini_image(model, prompt):
-    url = text_api_url(model)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {"contents":[{"role":"user","parts":[{"text":prompt}]}]}
     try:
         res = requests.post(url, json=payload, timeout=90)
@@ -119,6 +125,11 @@ with st.sidebar:
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
 
 # --------------------------
+# HEADER
+# --------------------------
+st.markdown("<hr>", unsafe_allow_html=True)
+
+# --------------------------
 # MAIN UI
 # --------------------------
 col_left, col_right = st.columns([3,2])
@@ -152,7 +163,6 @@ with col_left:
                 st.markdown(f"<div class='{cls}'>{msg_text}</div>", unsafe_allow_html=True)
                 if m.get("image"): 
                     st.image(m["image"], use_column_width=True)
-                    # nút download ảnh
                     st.download_button("📥 Tải ảnh", data=m["image"], file_name=f"minh_hoa_{uuid.uuid4().hex[:6]}.png", mime="image/png")
             st.markdown("</div>", unsafe_allow_html=True)
 
