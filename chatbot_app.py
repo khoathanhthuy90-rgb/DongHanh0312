@@ -1,4 +1,4 @@
-# app.py (Minimal & Colorful UI + Safe Update)
+# app_professional_ui.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -17,7 +17,7 @@ MODEL_OPTIONS = {
     "Gemini 1.5 Flash": "gemini-1.5-flash"
 }
 
-SYSTEM_INSTRUCTION = "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. Trình bày rõ ràng, dùng LaTeX cho công thức khi cần. Nếu có ảnh, sử dụng ảnh để giải thích."
+SYSTEM_INSTRUCTION = "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. Trình bày rõ ràng, dùng LaTeX khi cần. Nếu có ảnh, sử dụng ảnh để giải thích."
 
 STYLE_PROMPT_MAP = {
     "Gia sư trẻ trung": "young friendly tutor, smiling, colorful, modern, cartoon-realistic style"
@@ -28,12 +28,9 @@ st.set_page_config(page_title="Gia Sư Ảo", layout="wide", page_icon="🤖")
 # --------------------------
 # SESSION INIT
 # --------------------------
-if "chat_history" not in st.session_state: st.session_state.chat_history = []
-if "image_history" not in st.session_state: st.session_state.image_history = []
-if "user_input" not in st.session_state: st.session_state.user_input = ""
-if "chosen_model" not in st.session_state: st.session_state.chosen_model = list(MODEL_OPTIONS.values())[0]
-if "user_name" not in st.session_state: st.session_state.user_name = ""
-if "user_class" not in st.session_state: st.session_state.user_class = ""
+for key in ["chat_history","image_history","user_input","chosen_model","user_name","user_class"]:
+    if key not in st.session_state:
+        st.session_state[key] = "" if "input" in key or "name" in key or "class" in key else []
 
 # --------------------------
 # LOGIN
@@ -127,60 +124,60 @@ with col_left:
     st.subheader("Nhập đề bài / câu hỏi")
     user_q = st.text_area("", value=st.session_state.get("user_input",""), height=150)
     st.session_state.user_input = user_q
-    btn_send = st.button("Gửi & Sinh ảnh")
+    btn_send = st.button("Gửi lời giải")
+    btn_image = st.button("Tạo ảnh minh họa")
 
-    # Chat frame
     chat_container = st.empty()
-    with chat_container:
-        st.markdown(
-            "<div style='border:2px solid #3498db; border-radius:10px; padding:10px; max-height:450px; overflow-y:auto; background:#ecf0f1;'>",
-            unsafe_allow_html=True
-        )
-        for m in st.session_state.chat_history[-20:]:
-            color = "#dff9fb" if m["role"]=="assistant" else "#fce4ec"
-            st.markdown(f"<div style='background:{color}; padding:8px; border-radius:8px; margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
-            if m.get("image"): st.image(m["image"], use_column_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+    def show_chat():
+        with chat_container:
+            st.markdown(
+                """
+                <style>
+                .chat-box {border-radius:10px; padding:10px; max-height:450px; overflow-y:auto; background:#ecf0f1; box-shadow: 0 4px 12px rgba(0,0,0,0.1);}
+                .user-msg {background:#fce4ec; padding:8px; border-radius:8px; margin-bottom:5px; transition: transform 0.1s;}
+                .user-msg:hover {transform: scale(1.02);}
+                .ai-msg {background:#dff9fb; padding:8px; border-radius:8px; margin-bottom:5px; transition: transform 0.1s;}
+                .ai-msg:hover {transform: scale(1.02);}
+                </style>
+                <div class="chat-box">
+                """, unsafe_allow_html=True
+            )
+            for m in st.session_state.chat_history[-20:]:
+                cls = "ai-msg" if m["role"]=="assistant" else "user-msg"
+                st.markdown(f"<div class='{cls}'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
+                if m.get("image"): st.image(m["image"], use_column_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    show_chat()
+
+# --------------------------
+# ACTION: Gửi lời giải
+# --------------------------
+if btn_send and user_q.strip():
+    with st.spinner("⏳ Đang tạo lời giải..."):
+        answer_text, err = call_gemini_text(st.session_state.chosen_model, user_q)
+        if err: st.error(err)
+        else:
+            st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
+            st.session_state.chat_history.append({"role":"assistant","text":answer_text,"time":datetime.utcnow().isoformat()})
+            if tts_enabled: speak_text(answer_text)
+    show_chat()
+
+# --------------------------
+# ACTION: Tạo ảnh minh họa
+# --------------------------
+if btn_image and user_q.strip():
+    img_prompt = f"Educational illustration with style '{style}': {user_q}."
+    with st.spinner("🎨 Đang tạo ảnh minh họa..."):
+        img_b64, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
+        if img_err: st.error("Không tạo được ảnh: " + img_err)
+        else:
+            st.session_state.chat_history.append({"role":"assistant","text":"[Ảnh minh họa]", "image": base64.b64decode(img_b64), "time": datetime.utcnow().isoformat()})
+            store_image_entry(user_q, img_b64, style)
+    show_chat()
 
 with col_right:
     st.subheader("📂 Nhật ký ảnh")
     for entry in reversed(st.session_state.image_history[-6:]):
         st.image(base64.b64decode(entry["b64"]), width=160)
         st.write(f"📝 {entry['question'][:50]}...")
-
-# --------------------------
-# ACTION: Send & Auto Image (SAFE)
-# --------------------------
-if btn_send and user_q.strip():
-    with st.spinner("⏳ Đang tạo lời giải..."):
-        answer_text, err = call_gemini_text(st.session_state.chosen_model, user_q)
-        if err:
-            st.error(err)
-        else:
-            # lưu vào history
-            st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
-            st.session_state.chat_history.append({"role":"assistant","text":answer_text,"time":datetime.utcnow().isoformat()})
-
-            if tts_enabled:
-                speak_text(answer_text)
-
-            # tự động tạo ảnh minh họa
-            img_prompt = f"Educational illustration with style '{style}': {user_q}."
-            with st.spinner("🎨 Đang sinh ảnh minh họa..."):
-                img_b64, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
-            if not img_err:
-                st.session_state.chat_history[-1]["image"] = base64.b64decode(img_b64)
-                store_image_entry(user_q, img_b64, style)
-
-    # cập nhật chat trực tiếp
-    chat_container.empty()
-    with chat_container:
-        st.markdown(
-            "<div style='border:2px solid #3498db; border-radius:10px; padding:10px; max-height:450px; overflow-y:auto; background:#ecf0f1;'>",
-            unsafe_allow_html=True
-        )
-        for m in st.session_state.chat_history[-20:]:
-            color = "#dff9fb" if m["role"]=="assistant" else "#fce4ec"
-            st.markdown(f"<div style='background:{color}; padding:8px; border-radius:8px; margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
-            if m.get("image"): st.image(m["image"], use_column_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
