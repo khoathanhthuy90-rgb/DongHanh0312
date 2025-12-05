@@ -1,4 +1,4 @@
-# app.py (Enhanced UI + Auto Image)
+# app.py (Professional UI + Login)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -32,6 +32,26 @@ if "chat_history" not in st.session_state: st.session_state.chat_history = []
 if "image_history" not in st.session_state: st.session_state.image_history = []
 if "user_input" not in st.session_state: st.session_state.user_input = ""
 if "chosen_model" not in st.session_state: st.session_state.chosen_model = list(MODEL_OPTIONS.values())[0]
+if "user_name" not in st.session_state: st.session_state.user_name = ""
+if "user_class" not in st.session_state: st.session_state.user_class = ""
+
+# --------------------------
+# LOGIN
+# --------------------------
+if not st.session_state.user_name or not st.session_state.user_class:
+    st.markdown("<h1 style='text-align:center; color:#1f4e79'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align:center; color:gray'>ĐĂNG NHẬP TRƯỚC KHI SỬ DỤNG</h4>", unsafe_allow_html=True)
+    col1, col2 = st.columns([1,1])
+    with col1: name_input = st.text_input("Họ và tên")
+    with col2: class_input = st.text_input("Lớp")
+    if st.button("Đăng nhập"):
+        if name_input.strip() and class_input.strip():
+            st.session_state.user_name = name_input.strip()
+            st.session_state.user_class = class_input.strip()
+            st.success(f"Chào {st.session_state.user_name} - Lớp {st.session_state.user_class}! Bạn có thể bắt đầu hỏi bài.")
+        else:
+            st.warning("Vui lòng nhập đủ Họ tên và Lớp trước khi đăng nhập.")
+    st.stop()
 
 # --------------------------
 # HELPERS
@@ -86,7 +106,7 @@ def speak_text(text):
 # SIDEBAR
 # --------------------------
 with st.sidebar:
-    st.title("⚙️ Cài đặt")
+    st.markdown(f"### Xin chào, {st.session_state.user_name} - Lớp {st.session_state.user_class}")
     chosen_label = st.selectbox("Chọn model Gemini", list(MODEL_OPTIONS.keys()))
     st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
@@ -95,7 +115,7 @@ with st.sidebar:
 # --------------------------
 # HEADER
 # --------------------------
-st.markdown("<h1 style='text-align:center'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center; color:#1f4e79'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
 st.markdown("<h4 style='text-align:center; color:gray'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>", unsafe_allow_html=True)
 st.image("https://images.unsplash.com/photo-1596496053414-8c6a4d3b8927?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=400", width=200)
 
@@ -114,7 +134,7 @@ with col_right:
         if st.session_state.chat_history:
             for m in st.session_state.chat_history[-10:]:
                 role_color = "#d1e7dd" if m["role"]=="assistant" else "#f8d7da"
-                st.markdown(f"<div style='background:{role_color};padding:8px;border-radius:5px;margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background:{role_color};padding:10px;border-radius:8px;margin-bottom:5px'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
     with st.expander("📂 Nhật ký ảnh"):
         if st.session_state.image_history:
             for entry in reversed(st.session_state.image_history[-6:]):
@@ -133,7 +153,7 @@ if btn_send and user_q.strip():
     st.markdown(f"### 📘 Lời giải\n{answer_text}")
     if tts_enabled: speak_text(answer_text)
 
-    # Sinh ảnh tự động với style “Gia sư trẻ trung”
+    # Sinh ảnh tự động
     img_prompt = f"Educational illustration with style '{style}': {user_q}."
     with st.spinner("🎨 Đang sinh ảnh minh họa..."):
         img_b64, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
