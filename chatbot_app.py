@@ -6,6 +6,7 @@ import base64
 # ⚙️ CẤU HÌNH API GEMINI
 # ==========================
 GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_IMAGE_MODEL = "gemini-2.0-flash"   # model tạo ảnh minh hoạ
 
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -21,44 +22,16 @@ API_URL = (
     f"{GEMINI_MODEL}:generateContent?key={API_KEY}"
 )
 
+IMAGE_API_URL = (
+    f"https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{GEMINI_IMAGE_MODEL}:generateImage?key={API_KEY}"
+)
+
 SYSTEM_INSTRUCTION = (
     "Bạn là Gia sư ảo thân thiện và kiên nhẫn. "
     "Hãy giải bài cho học sinh cấp 2–3. "
     "Trình bày dễ hiểu, dùng LaTeX cho công thức khi cần."
 )
-
-# ==========================
-# >>>>> THÊM MỚI: HÌNH MINH HỌA <<<<<
-# ==========================
-IMAGE_LIBRARY = {
-    "vật lý": [
-        "https://upload.wikimedia.org/wikipedia/commons/0/02/Free-body-diagram.png",
-        "https://upload.wikimedia.org/wikipedia/commons/0/07/Inclined_plane.png",
-    ],
-    "chuyển động": [
-        "https://upload.wikimedia.org/wikipedia/commons/6/6e/Velocity_Time_Graph.png"
-    ],
-    "toán": [
-        "https://upload.wikimedia.org/wikipedia/commons/3/3f/Right_triangle_definitions.svg",
-        "https://upload.wikimedia.org/wikipedia/commons/2/2d/Linear_function_graph.png",
-    ],
-    "hóa học": [
-        "https://upload.wikimedia.org/wikipedia/commons/3/33/Periodic_table_large.png"
-    ],
-    "thực tế": [
-        "https://upload.wikimedia.org/wikipedia/commons/0/0c/Word_problem.png"
-    ],
-}
-
-def find_related_image(user_text: str):
-    """Tự tìm ảnh minh họa phù hợp theo từ khóa."""
-    text = user_text.lower()
-
-    for keyword, img_list in IMAGE_LIBRARY.items():
-        if keyword in text:
-            return img_list[0]  # lấy ảnh đầu tiên
-
-    return None
 
 # ==========================
 # 🖼️ CONVERT ẢNH BASE64
@@ -69,12 +42,40 @@ def get_base64_image(image_file):
     return base64.b64encode(image_file.getvalue()).decode("utf-8")
 
 # ==========================
-# 🤖 GỌI API GEMINI
+# 🧩 HÀM TẠO ẢNH MINH HỌA
+# ==========================
+def generate_illustration(prompt):
+    """Gọi Gemini để vẽ ảnh minh hoạ cho bài toán."""
+    try:
+        payload = {
+            "prompt": f"Vẽ hình minh hoạ cho bài toán sau, kiểu đơn giản, dễ hiểu, dành cho học sinh: {prompt}",
+            "size": "1024x1024",
+        }
+
+        res = requests.post(
+            IMAGE_API_URL,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=45,
+        )
+
+        if res.status_code != 200:
+            return None
+
+        data = res.json()
+        image_base64 = data.get("images", [{}])[0].get("image", None)
+        return image_base64
+
+    except:
+        return None
+
+# ==========================
+# 🤖 GỌI API GEMINI LẤY LỜI GIẢI
 # ==========================
 def get_gemini_response(prompt: str, image_data: str = None):
     chat_history = st.session_state.get("chat_history", [])
 
-    # Lịch sử hội thoại
+    # Lịch sử
     history_contents = []
     for msg in chat_history:
         history_contents.append({
@@ -91,11 +92,6 @@ def get_gemini_response(prompt: str, image_data: str = None):
         parts.append({
             "inlineData": {"mimeType": mime, "data": image_data}
         })
-
-    # >>>>> THÊM MỚI: CHÈN LINK HÌNH MINH HỌA <<<<<
-    suggest_img = find_related_image(prompt)
-    if suggest_img:
-        parts.append({"text": f"Hình minh họa: {suggest_img}"})
 
     if prompt:
         parts.append({"text": prompt})
@@ -128,7 +124,6 @@ def get_gemini_response(prompt: str, image_data: str = None):
         return f"❌ Lỗi API: mã {res.status_code}. Nội dung: {res.text[:300]}"
 
     data = res.json()
-
     return (
         data.get("candidates", [{}])[0]
             .get("content", {})
@@ -152,7 +147,6 @@ if st.session_state["should_reset_input"]:
     st.session_state["uploaded_file"] = None
     st.session_state["should_reset_input"] = False
 
-
 # ==========================
 # 🔑 ĐĂNG NHẬP
 # ==========================
@@ -165,7 +159,6 @@ def handle_login(name, class_name):
     st.session_state["chat_history"] = [
         {"role": "assistant", "content": f"Chào {name} (Lớp {class_name})! Mình là Gia sư ảo 👨‍🏫"}
     ]
-
 
 # ==========================
 # 💬 GỬI TIN NHẮN
@@ -193,16 +186,28 @@ def submit_chat():
             "content": text
         })
 
+    # --- Tạo ảnh minh hoạ trước ---
+    with st.spinner("🎨 Đang tạo hình minh hoạ..."):
+        illustration = generate_illustration(text)
+
+    # --- Lời giải bài toán ---
     with st.spinner("⏳ Đang phân tích..."):
         reply = get_gemini_response(text, image_base64)
 
+    # Lưu lời giải
     st.session_state["chat_history"].append({
         "role": "assistant",
         "content": reply
     })
 
-    st.session_state["should_reset_input"] = True
+    # Nếu có ảnh minh hoạ → hiển thị
+    if illustration:
+        st.session_state["chat_history"].append({
+            "role": "assistant",
+            "content": f"![Hình minh họa](data:image/png;base64,{illustration})"
+        })
 
+    st.session_state["should_reset_input"] = True
 
 # ==========================
 # 🎨 UI
@@ -228,7 +233,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
 def show_login():
     st.title("👨‍🏫 Gia Sư Ảo – Đề tài NCKH")
     st.subheader("Đăng nhập để bắt đầu học")
@@ -239,7 +243,6 @@ def show_login():
 
         if st.form_submit_button("Bắt đầu"):
             handle_login(name, class_name)
-
 
 def show_chat():
     user = st.session_state["user_info"]
@@ -271,7 +274,6 @@ def show_chat():
         st.text_input("Nhập câu hỏi…", key="user_input")
         if st.form_submit_button("Gửi"):
             submit_chat()
-
 
 # ==========================
 # 🚀 RUN APP
