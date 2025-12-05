@@ -1,111 +1,104 @@
 import streamlit as st
-from PIL import Image
 import requests
-import io
+import base64
 
 # ==============================
-#  KIỂM TRA API KEY
+# ĐỌC API KEY
 # ==============================
-API_KEY = st.secrets.get("API_KEY", None)
-
-if not API_KEY:
-    st.error("❌ Missing API_KEY in secrets. Vui lòng thêm vào `.streamlit/secrets.toml`:\n\nAPI_KEY = \"YOUR_KEY_HERE\"")
+if "API_KEY" not in st.secrets:
+    st.error("❌ Missing API_KEY in secrets.toml")
     st.stop()
 
+API_KEY = st.secrets["API_KEY"]
+MODEL = "gemini-2.0-flash"
+
 # ==============================
-#  GIAO DIỆN
+# HÀM GỌI GEMINI SINH VĂN BẢN
 # ==============================
-st.set_page_config(page_title="Gia Sư Ảo", layout="wide")
+def generate_text(prompt):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
+    body = { "contents": [{"role": "user", "parts": [{"text": prompt}]}] }
 
-st.title("GIA SƯ ẢO CỦA BẠN")
-st.caption("ĐỀ TÀI NGHIÊN CỨU KHOA HỌC")
+    res = requests.post(url, json=body)
+    if res.status_code != 200:
+        return f"❌ Lỗi API {res.status_code}: {res.text}"
 
-st.write("Nhập câu hỏi của bạn và hệ thống sẽ sinh câu trả lời hoặc hình ảnh minh hoạ.")
+    try:
+        return res.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except:
+        return "❌ Lỗi đọc response văn bản"
 
-# Lưu lịch sử chat
+# ==============================
+# HÀM GỌI GEMINI SINH ẢNH
+# ==============================
+def generate_image(prompt):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
+    body = { "contents": [{"role": "user", "parts": [{"text": prompt}]}] }
+
+    res = requests.post(url, json=body)
+    if res.status_code != 200:
+        return None, f"❌ Lỗi API {res.status_code}: {res.text}"
+
+    try:
+        parts = res.json()["candidates"][0]["content"]["parts"]
+        for p in parts:
+            if "media" in p:
+                img_bytes = base64.b64decode(p["media"]["data"])
+                return img_bytes, None
+        return None, "❌ Không tìm thấy ảnh trong phản hồi!"
+    except Exception as e:
+        return None, f"❌ Lỗi đọc ảnh: {e}"
+
+# ==============================
+# UI - TIÊU ĐỀ
+# ==============================
+st.set_page_config(page_title="Gia Sư Ảo", page_icon="🤖", layout="centered")
+
+st.markdown("""
+# 🤖 GIA SƯ ẢO CỦA BẠN
+### ĐỀ TÀI NGHIÊN CỨU KHOA HỌC
+""")
+
+# ==============================
+# LỊCH SỬ CHAT
+# ==============================
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# ==============================
-#  TEXT INPUT
-# ==============================
-user_input = st.text_input("Nhập câu hỏi:")
-
-col1, col2 = st.columns([1, 3])
-
-with col1:
-    gen_text = st.button("Sinh câu trả lời")
-with col2:
-    gen_image = st.button("Sinh ảnh minh hoạ")
-
+# HIỂN THỊ CHAT
+for msg in st.session_state.history:
+    with st.chat_message(msg["role"]):
+        st.write(msg["text"])
+        if msg.get("image"):
+            st.image(msg["image"], caption="Ảnh minh họa AI")
 
 # ==============================
-#  FUNCTION: GỌI API GEMINI
+# Ô NHẬP CHAT
 # ==============================
-def generate_text(prompt):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+user_input = st.chat_input("Nhập câu hỏi hoặc bài học của bạn...")
 
-    headers = {"Content-Type": "application/json"}
-    params = {"key": API_KEY}
+if user_input:
+    # Lưu tin người dùng
+    st.session_state.history.append({"role": "user", "text": user_input})
 
-    body = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
-    }
+    # --- Gọi AI sinh văn bản ---
+    with st.chat_message("assistant"):
+        st.write("⏳ Đang xử lý...")
 
-    res = requests.post(url, headers=headers, params=params, json=body)
-    data = res.json()
+        reply = generate_text(user_input)
 
-    try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except:
-        return "❌ Lỗi khi sinh văn bản."
+        st.session_state.history.append({"role": "assistant", "text": reply})
+        st.write(reply)
 
+        # --- Tự sinh ảnh đi kèm ---
+        img_prompt = f"Tạo ảnh minh họa rõ ràng, đẹp, cho nội dung: {user_input}"
 
-def generate_image(prompt):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        img_bytes, err = generate_image(img_prompt)
 
-    headers = {"Content-Type": "application/json"}
-    params = {"key": API_KEY}
+        if img_bytes and not err:
+            st.image(img_bytes, caption="Ảnh minh họa AI")
+            st.session_state.history[-1]["image"] = img_bytes
+        else:
+            st.warning(err)
 
-    body = {
-        "contents": [{
-            "parts": [{"text": f"Create an image: {prompt}"}]
-        }]
-    }
-
-    res = requests.post(url, headers=headers, params=params, json=body)
-    data = res.json()
-
-    try:
-        base64_img = data["candidates"][0]["content"]["parts"][0]["inline_data"]["data"]
-        return Image.open(io.BytesIO(base64.b64decode(base64_img)))
-    except:
-        return None
-
-
-# ==============================
-#  HANDLE ACTIONS
-# ==============================
-if gen_text and user_input:
-    answer = generate_text(user_input)
-    st.session_state.history.append(("Bạn", user_input))
-    st.session_state.history.append(("Bot", answer))
-
-if gen_image and user_input:
-    img = generate_image(user_input)
-    if img:
-        st.image(img, caption="Ảnh minh hoạ")
-        st.session_state.history.append(("Bot (image)", "Generated image"))
-    else:
-        st.error("❌ Không tạo được ảnh: Không tìm thấy dữ liệu hình ảnh.")
-
-
-# ==============================
-#  HIỂN THỊ LỊCH SỬ CHAT
-# ==============================
-st.subheader("📌 Lịch sử hội thoại")
-
-for speaker, msg in st.session_state.history:
-    st.write(f"**{speaker}:** {msg}")
+    st.rerun()
