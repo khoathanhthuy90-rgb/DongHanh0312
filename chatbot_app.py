@@ -28,6 +28,39 @@ SYSTEM_INSTRUCTION = (
 )
 
 # ==========================
+# >>>>> THÊM MỚI: HÌNH MINH HỌA <<<<<
+# ==========================
+IMAGE_LIBRARY = {
+    "vật lý": [
+        "https://upload.wikimedia.org/wikipedia/commons/0/02/Free-body-diagram.png",
+        "https://upload.wikimedia.org/wikipedia/commons/0/07/Inclined_plane.png",
+    ],
+    "chuyển động": [
+        "https://upload.wikimedia.org/wikipedia/commons/6/6e/Velocity_Time_Graph.png"
+    ],
+    "toán": [
+        "https://upload.wikimedia.org/wikipedia/commons/3/3f/Right_triangle_definitions.svg",
+        "https://upload.wikimedia.org/wikipedia/commons/2/2d/Linear_function_graph.png",
+    ],
+    "hóa học": [
+        "https://upload.wikimedia.org/wikipedia/commons/3/33/Periodic_table_large.png"
+    ],
+    "thực tế": [
+        "https://upload.wikimedia.org/wikipedia/commons/0/0c/Word_problem.png"
+    ],
+}
+
+def find_related_image(user_text: str):
+    """Tự tìm ảnh minh họa phù hợp theo từ khóa."""
+    text = user_text.lower()
+
+    for keyword, img_list in IMAGE_LIBRARY.items():
+        if keyword in text:
+            return img_list[0]  # lấy ảnh đầu tiên
+
+    return None
+
+# ==========================
 # 🖼️ CONVERT ẢNH BASE64
 # ==========================
 def get_base64_image(image_file):
@@ -41,7 +74,7 @@ def get_base64_image(image_file):
 def get_gemini_response(prompt: str, image_data: str = None):
     chat_history = st.session_state.get("chat_history", [])
 
-    # Lịch sử
+    # Lịch sử hội thoại
     history_contents = []
     for msg in chat_history:
         history_contents.append({
@@ -59,12 +92,14 @@ def get_gemini_response(prompt: str, image_data: str = None):
             "inlineData": {"mimeType": mime, "data": image_data}
         })
 
+    # >>>>> THÊM MỚI: CHÈN LINK HÌNH MINH HỌA <<<<<
+    suggest_img = find_related_image(prompt)
+    if suggest_img:
+        parts.append({"text": f"Hình minh họa: {suggest_img}"})
+
     if prompt:
         parts.append({"text": prompt})
 
-    # ====================
-    # Payload hợp lệ
-    # ====================
     payload = {
         "contents": [
             {
@@ -93,13 +128,13 @@ def get_gemini_response(prompt: str, image_data: str = None):
         return f"❌ Lỗi API: mã {res.status_code}. Nội dung: {res.text[:300]}"
 
     data = res.json()
+
     return (
         data.get("candidates", [{}])[0]
             .get("content", {})
             .get("parts", [{}])[0]
             .get("text", "")
     )
-
 
 # ==========================
 # 💾 SESSION STATE
@@ -116,6 +151,7 @@ if st.session_state["should_reset_input"]:
     st.session_state["user_input"] = ""
     st.session_state["uploaded_file"] = None
     st.session_state["should_reset_input"] = False
+
 
 # ==========================
 # 🔑 ĐĂNG NHẬP
