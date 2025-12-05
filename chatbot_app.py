@@ -1,4 +1,4 @@
-# app_professional_ui.py
+# app_full_professional.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -17,7 +17,10 @@ MODEL_OPTIONS = {
     "Gemini 1.5 Flash": "gemini-1.5-flash"
 }
 
-SYSTEM_INSTRUCTION = "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. Trình bày rõ ràng, dùng LaTeX khi cần. Nếu có ảnh, sử dụng ảnh để giải thích."
+SYSTEM_INSTRUCTION = (
+    "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. "
+    "Trình bày rõ ràng, dùng LaTeX khi cần. Nếu có ảnh, sử dụng ảnh để giải thích."
+)
 
 STYLE_PROMPT_MAP = {
     "Gia sư trẻ trung": "young friendly tutor, smiling, colorful, modern, cartoon-realistic style"
@@ -36,8 +39,14 @@ for key in ["chat_history","image_history","user_input","chosen_model","user_nam
 # LOGIN
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
-    st.markdown("<h1 style='text-align:center; color:#2c3e50'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align:center; color:#7f8c8d'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>", unsafe_allow_html=True)
+    # Header với ảnh gia sư
+    st.markdown("""
+        <div style="text-align:center;">
+            <img src="https://i.imgur.com/4AiXzf8.png" width="120" style="border-radius:50%;"/>
+            <h1 style='color:#2c3e50'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>
+            <h4 style='color:#7f8c8d'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
+        </div>
+    """, unsafe_allow_html=True)
     col1, col2 = st.columns([1,1])
     with col1: name_input = st.text_input("Họ và tên")
     with col2: class_input = st.text_input("Lớp")
@@ -110,12 +119,6 @@ with st.sidebar:
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
 
 # --------------------------
-# HEADER
-# --------------------------
-st.markdown("<h1 style='text-align:center; color:#2c3e50'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align:center; color:#7f8c8d'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>", unsafe_allow_html=True)
-
-# --------------------------
 # MAIN UI
 # --------------------------
 col_left, col_right = st.columns([3,2])
@@ -133,19 +136,24 @@ with col_left:
             st.markdown(
                 """
                 <style>
-                .chat-box {border-radius:10px; padding:10px; max-height:450px; overflow-y:auto; background:#ecf0f1; box-shadow: 0 4px 12px rgba(0,0,0,0.1);}
-                .user-msg {background:#fce4ec; padding:8px; border-radius:8px; margin-bottom:5px; transition: transform 0.1s;}
+                .chat-box {border-radius:12px; padding:12px; max-height:500px; overflow-y:auto; background:#fefefe; box-shadow:0 6px 18px rgba(0,0,0,0.12);}
+                .user-msg {background:#fce4ec; padding:10px; border-radius:10px; margin-bottom:6px; transition: transform 0.1s;}
                 .user-msg:hover {transform: scale(1.02);}
-                .ai-msg {background:#dff9fb; padding:8px; border-radius:8px; margin-bottom:5px; transition: transform 0.1s;}
+                .ai-msg {background:#dff9fb; padding:10px; border-radius:10px; margin-bottom:6px; transition: transform 0.1s;}
                 .ai-msg:hover {transform: scale(1.02);}
+                .latex {color:#2c3e50; font-weight:bold;}
                 </style>
                 <div class="chat-box">
                 """, unsafe_allow_html=True
             )
             for m in st.session_state.chat_history[-20:]:
                 cls = "ai-msg" if m["role"]=="assistant" else "user-msg"
-                st.markdown(f"<div class='{cls}'><b>{m['role'].capitalize()}:</b> {m['text']}</div>", unsafe_allow_html=True)
-                if m.get("image"): st.image(m["image"], use_column_width=True)
+                msg_text = m['text'].replace("$","<span class='latex'>$")+"</span>" if "$" in m['text'] else m['text']
+                st.markdown(f"<div class='{cls}'>{msg_text}</div>", unsafe_allow_html=True)
+                if m.get("image"): 
+                    st.image(m["image"], use_column_width=True)
+                    # nút download ảnh
+                    st.download_button("📥 Tải ảnh", data=m["image"], file_name=f"minh_hoa_{uuid.uuid4().hex[:6]}.png", mime="image/png")
             st.markdown("</div>", unsafe_allow_html=True)
 
     show_chat()
@@ -172,7 +180,12 @@ if btn_image and user_q.strip():
         img_b64, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
         if img_err: st.error("Không tạo được ảnh: " + img_err)
         else:
-            st.session_state.chat_history.append({"role":"assistant","text":"[Ảnh minh họa]", "image": base64.b64decode(img_b64), "time": datetime.utcnow().isoformat()})
+            st.session_state.chat_history.append({
+                "role":"assistant",
+                "text":"[Ảnh minh họa]",
+                "image": base64.b64decode(img_b64),
+                "time": datetime.utcnow().isoformat()
+            })
             store_image_entry(user_q, img_b64, style)
     show_chat()
 
