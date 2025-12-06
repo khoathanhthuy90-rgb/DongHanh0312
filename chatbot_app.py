@@ -1,4 +1,4 @@
-# app_gia_su_ao_v6_final.py (Đã sửa lỗi hiển thị ảnh Login)
+# app_gia_su_ao_v7_final.py (Tối ưu hóa Xóa Input)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -34,15 +34,16 @@ for key in ["chat_history", "image_history", "chosen_model"]:
     if key not in st.session_state:
         st.session_state[key] = []
         
-for key in ["user_name", "user_class", "user_input_area", "pending_action", "temp_question"]:
+for key in ["user_name", "user_class", "user_input_area", "pending_action", "temp_question", "tts_enabled", "style"]:
     if key not in st.session_state:
         st.session_state[key] = ""
 
+
 # --------------------------
-# HELPERS & CALLBACKS (Giữ nguyên logic API đã sửa lỗi)
+# HELPERS & CALLBACKS
 # --------------------------
+# (Giữ nguyên logic API đã sửa lỗi và tối thiểu hóa payload)
 def call_gemini_text(model, user_prompt):
-    """ Payload tối thiểu, không dùng temperature/maxOutputTokens. """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     full_prompt = f"{SYSTEM_INSTRUCTION}\n\n[Đề bài]: {user_prompt}"
     payload = {
@@ -59,7 +60,6 @@ def call_gemini_text(model, user_prompt):
         return None, f"Lỗi API văn bản: {error_detail}"
 
 def call_gemini_image(model, prompt):
-    """ Payload tối thiểu, không dùng temperature. """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {
         "contents":[{"role":"user","parts":[{"text": prompt}]}]
@@ -98,23 +98,27 @@ def speak_text(text):
     except Exception:
          st.warning("Không thể tạo giọng nói.")
 
-# CALLBACK FUNCTION (Giữ nguyên logic sửa lỗi Streamlit State)
-def handle_send_text():
+# SỬ DỤNG HÀM PHỤ TRỢ ĐỂ CHUYỂN TRẠNG THÁI VÀ XÓA INPUT
+def set_pending_action(action_type):
+    """
+    Hàm callback phụ trợ được gọi bởi on_click.
+    Lấy nội dung input, xóa input và đặt hành động chờ.
+    """
     q = st.session_state.user_input_area.strip()
     if not q: return
+    
+    # 1. Gán câu hỏi
     st.session_state["temp_question"] = q
+    
+    # 2. Xóa input (Gây ra lỗi State Conflict nếu không dùng callback/ vị trí sai)
     st.session_state.user_input_area = ""
-    st.session_state["pending_action"] = "text"
+    
+    # 3. Đặt hành động
+    st.session_state["pending_action"] = action_type
 
-def handle_send_image():
-    q = st.session_state.user_input_area.strip()
-    if not q: return
-    st.session_state["temp_question"] = q
-    st.session_state.user_input_area = ""
-    st.session_state["pending_action"] = "image"
 
 # --------------------------
-# LOGIN (ĐÃ SỬA LỖI HÌNH ẢNH)
+# LOGIN (Giữ nguyên)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
@@ -137,21 +141,19 @@ if not st.session_state.user_name or not st.session_state.user_class:
     st.stop()
 
 # --------------------------
-# SIDEBAR (Giữ nguyên)
+# SIDEBAR
 # --------------------------
 with st.sidebar:
     st.markdown(f"### Xin chào, {st.session_state.user_name} - Lớp {st.session_state.user_class}")
     chosen_label = st.selectbox("Chọn model Gemini", list(MODEL_OPTIONS.keys()))
     st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
-    tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
-    # Lưu tts_enabled vào state để dùng trong hàm xử lý pending action
+    tts_enabled = st.checkbox("Bật Text-to-Speech", value=st.session_state.get("tts_enabled", False))
     st.session_state["tts_enabled"] = tts_enabled 
-    # Lưu style vào state
     st.session_state["style"] = style 
 
 # --------------------------
-# MAIN UI
+# MAIN UI & CHAT DISPLAY
 # --------------------------
 with st.container():
     col_left, col_right = st.columns([3, 1]) 
@@ -227,7 +229,9 @@ user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_in
 col1_btn, col2_btn = st.columns([1,1])
 
 with col1_btn:
-    st.button("Gửi câu hỏi", use_container_width=True, type="primary", on_click=handle_send_text)
+    # Gán hàm callback cho nút gửi văn bản
+    st.button("Gửi câu hỏi", use_container_width=True, type="primary", on_click=set_pending_action, args=("text",))
 
 with col2_btn:
-    st.button("Tạo ảnh minh họa", use_container_width=True, on_click=handle_send_image)
+    # Gán hàm callback cho nút tạo ảnh
+    st.button("Tạo ảnh minh họa", use_container_width=True, on_click=set_pending_action, args=("image",))
