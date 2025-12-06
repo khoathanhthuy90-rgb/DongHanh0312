@@ -1,4 +1,4 @@
-# app_gia_su_ao_v_final_modern_v3.py (Đã tối ưu hóa State Management)
+# app_gia_su_ao_v_final_modern_v4.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -28,20 +28,22 @@ STYLE_PROMPT_MAP = {
 st.set_page_config(page_title="Gia Sư Ảo", layout="wide", page_icon="🤖")
 
 # --------------------------
-# SESSION INIT
+# SESSION INIT (an toàn)
 # --------------------------
-for key in ["chat_history", "image_history", "chosen_model"]:
+default_keys = {
+    "chat_history": [],
+    "image_history": [],
+    "chosen_model": "",
+    "user_name": "",
+    "user_class": "",
+    "user_input_area": "",
+}
+for key, default in default_keys.items():
     if key not in st.session_state:
-        st.session_state[key] = []
-        
-# Khởi tạo key cho chuỗi (tên, lớp và input area)
-for key in ["user_name", "user_class", "user_input_area"]:
-    if key not in st.session_state:
-        st.session_state[key] = ""
-
+        st.session_state[key] = default
 
 # --------------------------
-# LOGIN (Giữ nguyên)
+# LOGIN
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
@@ -56,54 +58,48 @@ if not st.session_state.user_name or not st.session_state.user_class:
     with col2: class_input = st.text_input("Lớp")
     if st.button("Đăng nhập", use_container_width=True):
         if name_input.strip() and class_input.strip():
-            st.session_state.user_name = name_input.strip()
-            st.session_state.user_class = class_input.strip()
+            st.session_state.update({"user_name": name_input.strip(),
+                                     "user_class": class_input.strip()})
             st.rerun()  
         else:
             st.warning("Vui lòng nhập đủ Họ tên và Lớp.")
     st.stop()
 
 # --------------------------
-# HELPERS (Giữ nguyên)
+# HELPERS
 # --------------------------
 def call_gemini_text(model, user_prompt):
-    """ Loại bỏ 'config', nhúng system instruction vào prompt và sửa cú pháp response. """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
+    """Payload đúng chuẩn v1beta, loại bỏ temperature/maxOutputTokens"""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
     full_prompt = f"{SYSTEM_INSTRUCTION}\n\n[Đề bài]: {user_prompt}"
     
     payload = {
-        "contents": [{"role":"user", "parts":[{"text": full_prompt}]}],
-        "temperature": 0.2,
-        "maxOutputTokens": 2048 
+        "prompt": full_prompt
     }
     try:
         res = requests.post(url, json=payload, timeout=60)
         res.raise_for_status()
         data = res.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        # response text v1beta
+        text = data.get("outputText", "")
         return text, None
     except Exception as e:
         error_detail = res.text if 'res' in locals() else str(e)
         return None, f"Lỗi API văn bản: {error_detail}"
 
 def call_gemini_image(model, prompt):
-    """ Loại bỏ 'config' và sửa cú pháp lấy media. """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-    payload = {
-        "contents":[{"role":"user","parts":[{"text": prompt}]}],
-        "temperature": 0.2,
-    }
+    """Payload tạo ảnh v1beta"""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateImage?key={API_KEY}"
+    payload = {"prompt": prompt}
     try:
         res = requests.post(url, json=payload, timeout=90)
         res.raise_for_status()
         data = res.json()
-        
-        for candidate in data.get("candidates", []):
-            for part in candidate.get("content", {}).get("parts", []): 
-                if "inlineData" in part and part["inlineData"]["mimeType"].startswith("image/"):
-                    return part["inlineData"]["data"], None
-        
-        return None, "Không tìm thấy media (ảnh) trong phản hồi. Hãy kiểm tra xem mô hình có hỗ trợ tạo ảnh không."
+        # Lấy base64 image
+        img_b64 = data.get("image", "")
+        if img_b64:
+            return img_b64, None
+        return None, "Không tìm thấy ảnh trong response."
     except Exception as e:
         error_detail = res.text if 'res' in locals() else str(e)
         return None, f"Lỗi API ảnh: {error_detail}"
@@ -111,8 +107,10 @@ def call_gemini_image(model, prompt):
 def store_image_entry(question_text, img_b64, style_key):
     img_id = str(uuid.uuid4())
     st.session_state.image_history.append({
-        "id": img_id, "question": question_text,
-        "b64": img_b64, "style": style_key,
+        "id": img_id,
+        "question": question_text,
+        "b64": img_b64,
+        "style": style_key,
         "time": datetime.utcnow().isoformat()
     })
     return img_id
@@ -126,13 +124,11 @@ def speak_text(text):
         tts.write_to_fp(fp)
         fp.seek(0)
         st.audio(fp.read(), format="audio/mp3")
-    except ImportError:
-         st.warning("Không thể tạo giọng nói. Vui lòng cài đặt gTTS: `pip install gTTS`.")
-    except Exception:
-         st.warning("Không thể tạo giọng nói.")
+    except:
+        st.warning("Không thể tạo giọng nói.")
 
 # --------------------------
-# SIDEBAR (Giữ nguyên)
+# SIDEBAR
 # --------------------------
 with st.sidebar:
     st.markdown(f"### Xin chào, {st.session_state.user_name} - Lớp {st.session_state.user_class}")
@@ -142,7 +138,7 @@ with st.sidebar:
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
 
 # --------------------------
-# MAIN UI (Giữ nguyên)
+# MAIN UI
 # --------------------------
 with st.container():
     col_left, col_right = st.columns([3, 1]) 
@@ -162,7 +158,6 @@ with st.container():
                 for msg in reversed(st.session_state.chat_history):
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
-                    
                     st.markdown(f"""
                     <div style='
                         background:{color}; 
@@ -173,26 +168,22 @@ with st.container():
                     '>
                         {msg['text']}
                     </div>""", unsafe_allow_html=True)
-                    
                     if msg.get("image_b64"):
                         st.image(base64.b64decode(msg["image_b64"]), use_column_width=True)
         
         show_chat()
 
+# --------------------------
 # Hộp nhập câu hỏi dưới cùng
-# SỬA LỖI: Dùng key cho text_area. Giá trị trong key sẽ được cập nhật.
+# --------------------------
 user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_input_area") 
 col1_btn, col2_btn = st.columns([1,1])
 
 with col1_btn:
     if st.button("Gửi câu hỏi", use_container_width=True, type="primary"):
-        # Lấy giá trị từ key
         q = st.session_state.user_input_area.strip()
-        
         if q:
-            # Gán giá trị rỗng trước khi xử lý API, sau đó gọi rerun.
-            st.session_state.user_input_area = ""
-            
+            st.session_state.update({"user_input_area": ""})
             st.session_state.chat_history.append({"role":"user","text":q,"time":datetime.utcnow().isoformat()})
             with st.spinner("⏳ Đang tạo lời giải..."):
                 answer, err = call_gemini_text(st.session_state.chosen_model, q)
@@ -201,18 +192,13 @@ with col1_btn:
                 else:
                     st.session_state.chat_history.append({"role":"assistant","text":answer,"time":datetime.utcnow().isoformat()})
                     if tts_enabled: speak_text(answer)
-            
             st.rerun()
 
 with col2_btn:
     if st.button("Tạo ảnh minh họa", use_container_width=True):
-        # Lấy giá trị từ key
         q = st.session_state.user_input_area.strip()
-        
         if q:
-            # Gán giá trị rỗng trước khi xử lý API, sau đó gọi rerun.
-            st.session_state.user_input_area = ""
-            
+            st.session_state.update({"user_input_area": ""})
             st.session_state.chat_history.append({"role":"user","text":f"[Yêu cầu tạo ảnh]: {q}","time":datetime.utcnow().isoformat()})
             with st.spinner("🎨 Đang tạo ảnh minh họa..."):
                 img_b64, img_err = call_gemini_image(st.session_state.chosen_model, f"{q} - style: {style}")
@@ -224,5 +210,4 @@ with col2_btn:
                         "time":datetime.utcnow().isoformat()
                     })
                     store_image_entry(q, img_b64, style)
-            
             st.rerun()
