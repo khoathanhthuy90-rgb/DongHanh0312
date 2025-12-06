@@ -1,4 +1,4 @@
-# app_gia_su_ao_v7_final.py (Tối ưu hóa Xóa Input)
+# app_gia_su_ao_v9_final.py (Cá nhân hóa và Icon AI)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -16,6 +16,7 @@ MODEL_OPTIONS = {
     "Gemini 2.5 Pro": "gemini-2.5-pro",
 }
 
+# HƯỚNG DẪN HỆ THỐNG GỐC
 SYSTEM_INSTRUCTION = (
     "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. "
     "Trình bày rõ ràng, dùng LaTeX khi cần."
@@ -42,10 +43,24 @@ for key in ["user_name", "user_class", "user_input_area", "pending_action", "tem
 # --------------------------
 # HELPERS & CALLBACKS
 # --------------------------
-# (Giữ nguyên logic API đã sửa lỗi và tối thiểu hóa payload)
 def call_gemini_text(model, user_prompt):
+    """
+    Sửa đổi: Thêm context cá nhân hóa vào prompt.
+    """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-    full_prompt = f"{SYSTEM_INSTRUCTION}\n\n[Đề bài]: {user_prompt}"
+    
+    # Lấy tên học sinh đã đăng nhập
+    user_name = st.session_state.get("user_name", "học sinh")
+    user_class = st.session_state.get("user_class", "Chưa rõ")
+    
+    # Thêm context cá nhân hóa vào đầu prompt
+    personal_context = (
+        f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
+        "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
+    )
+    
+    full_prompt = f"{SYSTEM_INSTRUCTION} {personal_context}\n\n[Đề bài]: {user_prompt}"
+    
     payload = {
         "contents": [{"role":"user", "parts":[{"text": full_prompt}]}]
     }
@@ -98,32 +113,21 @@ def speak_text(text):
     except Exception:
          st.warning("Không thể tạo giọng nói.")
 
-# SỬ DỤNG HÀM PHỤ TRỢ ĐỂ CHUYỂN TRẠNG THÁI VÀ XÓA INPUT
 def set_pending_action(action_type):
-    """
-    Hàm callback phụ trợ được gọi bởi on_click.
-    Lấy nội dung input, xóa input và đặt hành động chờ.
-    """
     q = st.session_state.user_input_area.strip()
     if not q: return
-    
-    # 1. Gán câu hỏi
     st.session_state["temp_question"] = q
-    
-    # 2. Xóa input (Gây ra lỗi State Conflict nếu không dùng callback/ vị trí sai)
     st.session_state.user_input_area = ""
-    
-    # 3. Đặt hành động
     st.session_state["pending_action"] = action_type
 
 
 # --------------------------
-# LOGIN (Giữ nguyên)
+# LOGIN (ĐÃ SỬA LỖI HÌNH ẢNH)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
         <div style="text-align:center; background: linear-gradient(to right, #74ebd5, #ACB6E5); padding:30px; border-radius:12px; margin-bottom:20px;">
-            <div style="font-size: 80px; margin-bottom: 10px;">👨‍🏫</div> 
+            <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
             <h1 style='color:#2c3e50; margin:10px;'>GIA SƯ ẢO CỦA BẠN</h1>
             <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
@@ -153,7 +157,7 @@ with st.sidebar:
     st.session_state["style"] = style 
 
 # --------------------------
-# MAIN UI & CHAT DISPLAY
+# MAIN UI
 # --------------------------
 with st.container():
     col_left, col_right = st.columns([3, 1]) 
@@ -170,7 +174,8 @@ with st.container():
 
         def show_chat():
             with chat_container:
-                for msg in reversed(st.session_state.chat_history):
+                # Hiển thị tin nhắn mới nhất ở dưới cùng (không dùng reversed)
+                for msg in st.session_state.chat_history: 
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
                     
@@ -229,9 +234,7 @@ user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_in
 col1_btn, col2_btn = st.columns([1,1])
 
 with col1_btn:
-    # Gán hàm callback cho nút gửi văn bản
     st.button("Gửi câu hỏi", use_container_width=True, type="primary", on_click=set_pending_action, args=("text",))
 
 with col2_btn:
-    # Gán hàm callback cho nút tạo ảnh
     st.button("Tạo ảnh minh họa", use_container_width=True, on_click=set_pending_action, args=("image",))
