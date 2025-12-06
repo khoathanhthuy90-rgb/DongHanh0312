@@ -49,7 +49,7 @@ def call_gemini_text(model, user_prompt):
     user_name = st.session_state.get("user_name", "học sinh")
     user_class = st.session_state.get("user_class", "Chưa rõ")
     
-    # Thêm context cá nhân hóa
+    # Thêm context cá nhân hóa (Tính năng GIỮ LẠI)
     personal_context = (
         f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
         "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
@@ -99,7 +99,7 @@ def store_image_entry(question_text, img_b64, style_key):
     return img_id
 
 def speak_text(text):
-    """Tính năng Text-to-Speech sử dụng gTTS."""
+    """Tính năng Text-to-Speech (GIỮ LẠI)."""
     try:
         from gtts import gTTS
         fp = io.BytesIO()
@@ -113,7 +113,7 @@ def speak_text(text):
          st.warning("Không thể tạo giọng nói.")
 
 def set_pending_action(action_type):
-    """Callback để xử lý sự kiện nút bấm và xóa input."""
+    """Callback để xử lý sự kiện nút bấm và xóa input (GIỮ LẠI)."""
     q = st.session_state.user_input_area.strip()
     if not q: return
     st.session_state["temp_question"] = q
@@ -171,7 +171,7 @@ with st.container():
     
     with col_right:
         st.subheader("📂 Nhật ký ảnh")
-        # Hiển thị 6 ảnh gần nhất
+        # Hiển thị 6 ảnh gần nhất (GIỮ LẠI)
         for entry in reversed(st.session_state.image_history[-6:]):
             try:
                 # Cần decode base64 sang bytes trước khi hiển thị
@@ -205,7 +205,7 @@ with st.container():
                     
                     if msg.get("image_b64"):
                         try:
-                            # Cần decode base64 sang bytes trước khi hiển thị
+                            # Cần decode base64 sang bytes trước khi hiển thị (GIỮ LẠI)
                             st.image(base64.b64decode(msg["image_b64"]), use_column_width=True)
                         except Exception:
                             st.error("Lỗi hiển thị ảnh.")
