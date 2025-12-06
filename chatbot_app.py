@@ -6,6 +6,7 @@ from datetime import datetime
 # --------------------------
 # CONFIG
 # --------------------------
+# Lưu ý: Cần đảm bảo có GEMINI_API_KEY trong file .streamlit/secrets.toml
 API_KEY = st.secrets.get("GEMINI_API_KEY", "").strip()
 if not API_KEY:
     st.error("⚠️ Thiếu GEMINI_API_KEY trong .streamlit/secrets.toml. Vui lòng kiểm tra lại cấu hình.")
@@ -36,6 +37,7 @@ for key in ["chat_history", "image_history", "chosen_model"]:
         
 for key in ["user_name", "user_class", "user_input_area", "pending_action", "temp_question", "tts_enabled", "style"]:
     if key not in st.session_state:
+        # Khởi tạo giá trị mặc định cho các khóa
         st.session_state[key] = "" if key not in ["tts_enabled"] else False
 
 
@@ -43,11 +45,12 @@ for key in ["user_name", "user_class", "user_input_area", "pending_action", "tem
 # HELPERS & CALLBACKS
 # --------------------------
 def call_gemini_text(model, user_prompt):
+    """Gọi API Gemini Text với context cá nhân hóa và payload tối thiểu."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     user_name = st.session_state.get("user_name", "học sinh")
     user_class = st.session_state.get("user_class", "Chưa rõ")
     
-    # Cá nhân hóa
+    # Thêm context cá nhân hóa (Tính năng được giữ lại)
     personal_context = (
         f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
         "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
@@ -68,6 +71,7 @@ def call_gemini_text(model, user_prompt):
         return None, f"Lỗi API văn bản: {error_detail}"
 
 def call_gemini_image(model, prompt):
+    """Gọi API Gemini Image với payload tối thiểu."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {
         "contents":[{"role":"user","parts":[{"text": prompt}]}]
@@ -86,6 +90,7 @@ def call_gemini_image(model, prompt):
         return None, f"Lỗi API ảnh: {error_detail}"
 
 def store_image_entry(question_text, img_b64, style_key):
+    """Lưu trữ lịch sử ảnh đã tạo."""
     img_id = str(uuid.uuid4())
     st.session_state.image_history.append({
         "id": img_id, "question": question_text,
@@ -95,9 +100,11 @@ def store_image_entry(question_text, img_b64, style_key):
     return img_id
 
 def speak_text(text):
+    """Tính năng Text-to-Speech sử dụng gTTS (Tính năng được giữ lại)."""
     try:
         from gtts import gTTS
         fp = io.BytesIO()
+        # Loại bỏ các ký tự LaTeX và Markdown để đọc mượt hơn
         clean_text = text.replace("**","").replace("$","").replace("\\","").replace("{","").replace("}","")
         tts = gTTS(text=clean_text, lang="vi")
         tts.write_to_fp(fp)
@@ -107,15 +114,16 @@ def speak_text(text):
          st.warning("Không thể tạo giọng nói.")
 
 def set_pending_action(action_type):
+    """Callback để xử lý sự kiện nút bấm và xóa input (Khắc phục lỗi State đã được giữ lại)."""
     q = st.session_state.user_input_area.strip()
     if not q: return
     st.session_state["temp_question"] = q
-    st.session_state.user_input_area = ""
+    st.session_state.user_input_area = "" 
     st.session_state["pending_action"] = action_type
 
 
 # --------------------------
-# LOGIN (KHÔI PHỤC UI ỔN ĐỊNH)
+# LOGIN (KHÔI PHỤC UI ỔN ĐỊNH: font-size 28px, màu phụ đề xám)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
@@ -164,16 +172,19 @@ with st.container():
     
     with col_right:
         st.subheader("📂 Nhật ký ảnh")
+        # Hiển thị 6 ảnh gần nhất (Tính năng được giữ lại)
         for entry in reversed(st.session_state.image_history[-6:]):
             st.image(base64.b64decode(entry["b64"]), width=100)
             st.caption(f"📝 {entry['question'][:30]}...")
 
     with col_left:
+        # CSS cho khung chat
         st.markdown("<style> .chat-box {max-height:600px; overflow-y:auto; padding:10px;} </style>", unsafe_allow_html=True) 
         chat_container = st.container()
 
         def show_chat():
             with chat_container:
+                # Lặp qua lịch sử chat để hiển thị (Tin nhắn mới nhất ở dưới cùng được giữ lại)
                 for msg in st.session_state.chat_history: 
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
