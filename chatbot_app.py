@@ -1,4 +1,4 @@
-# app_gia_su_ao_v_final_modern_v2.py
+# app_gia_su_ao_v_final_modern_v3.py (Đã tối ưu hóa State Management)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -64,7 +64,7 @@ if not st.session_state.user_name or not st.session_state.user_class:
     st.stop()
 
 # --------------------------
-# HELPERS (Đã sửa cú pháp API để lấy response)
+# HELPERS (Giữ nguyên)
 # --------------------------
 def call_gemini_text(model, user_prompt):
     """ Loại bỏ 'config', nhúng system instruction vào prompt và sửa cú pháp response. """
@@ -80,7 +80,6 @@ def call_gemini_text(model, user_prompt):
         res = requests.post(url, json=payload, timeout=60)
         res.raise_for_status()
         data = res.json()
-        # Cú pháp truy cập response chuẩn: content -> parts[0] -> text
         text = data["candidates"][0]["content"]["parts"][0]["text"]
         return text, None
     except Exception as e:
@@ -143,7 +142,7 @@ with st.sidebar:
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
 
 # --------------------------
-# MAIN UI
+# MAIN UI (Giữ nguyên)
 # --------------------------
 with st.container():
     col_left, col_right = st.columns([3, 1]) 
@@ -181,15 +180,17 @@ with st.container():
         show_chat()
 
 # Hộp nhập câu hỏi dưới cùng
-user_q = st.text_area("Nhập câu hỏi của bạn:", value=st.session_state.user_input_area, height=120, key="user_input_area")
+# SỬA LỖI: Dùng key cho text_area. Giá trị trong key sẽ được cập nhật.
+user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_input_area") 
 col1_btn, col2_btn = st.columns([1,1])
 
 with col1_btn:
     if st.button("Gửi câu hỏi", use_container_width=True, type="primary"):
-        q = user_q.strip()
+        # Lấy giá trị từ key
+        q = st.session_state.user_input_area.strip()
+        
         if q:
-            # Gán giá trị rỗng trước khi xử lý, hoặc dùng biến cục bộ
-            # **ĐÃ SỬA LỖI:** Chuyển dòng này lên đầu để tránh xung đột trạng thái
+            # Gán giá trị rỗng trước khi xử lý API, sau đó gọi rerun.
             st.session_state.user_input_area = ""
             
             st.session_state.chat_history.append({"role":"user","text":q,"time":datetime.utcnow().isoformat()})
@@ -205,9 +206,11 @@ with col1_btn:
 
 with col2_btn:
     if st.button("Tạo ảnh minh họa", use_container_width=True):
-        q = user_q.strip()
+        # Lấy giá trị từ key
+        q = st.session_state.user_input_area.strip()
+        
         if q:
-            # **ĐÃ SỬA LỖI:** Chuyển dòng này lên đầu để tránh xung đột trạng thái
+            # Gán giá trị rỗng trước khi xử lý API, sau đó gọi rerun.
             st.session_state.user_input_area = ""
             
             st.session_state.chat_history.append({"role":"user","text":f"[Yêu cầu tạo ảnh]: {q}","time":datetime.utcnow().isoformat()})
