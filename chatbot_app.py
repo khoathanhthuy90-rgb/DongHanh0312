@@ -3,7 +3,9 @@ import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
 
-# -------------------------- CONFIG --------------------------
+# --------------------------
+# CONFIG
+# --------------------------
 API_KEY = st.secrets.get("GEMINI_API_KEY", "").strip()
 if not API_KEY:
     st.error("⚠️ Thiếu GEMINI_API_KEY trong .streamlit/secrets.toml")
@@ -11,12 +13,12 @@ if not API_KEY:
 
 MODEL_OPTIONS = {
     "Gemini 2.5 Flash": "gemini-2.5-flash",
-    "Gemini 2.5 Pro": "gemini-2.5-pro",
+    "Gemini 2.5 Pro": "gemini-2.5-pro"
 }
 
 SYSTEM_INSTRUCTION = (
     "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. "
-    "Trình bày rõ ràng, dùng LaTeX khi cần."
+    "Trình bày rõ ràng, dùng ví dụ, LaTeX khi cần, giọng điệu dễ hiểu."
 )
 
 STYLE_PROMPT_MAP = {
@@ -25,16 +27,19 @@ STYLE_PROMPT_MAP = {
 
 st.set_page_config(page_title="Gia Sư Ảo", layout="wide", page_icon="🤖")
 
-# -------------------------- SESSION INIT --------------------------
+# --------------------------
+# SESSION INIT
+# --------------------------
 for key in ["chat_history","image_history","user_input","chosen_model","user_name","user_class"]:
     if key not in st.session_state:
         st.session_state[key] = "" if "input" in key or "name" in key or "class" in key else []
 
-# -------------------------- LOGIN --------------------------
+# --------------------------
+# LOGIN
+# --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
-        <div style="text-align:center; background: linear-gradient(to right, #74ebd5, #ACB6E5);
-                    padding:30px; border-radius:12px; margin-bottom:20px;">
+        <div style="text-align:center; background: linear-gradient(to right, #74ebd5, #ACB6E5); padding:30px; border-radius:12px; margin-bottom:20px;">
             <img src="https://i.imgur.com/4AiXzf8.png" width="120" style="border-radius:50%;"/>
             <h1 style='color:#2c3e50; margin:10px;'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>
             <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
@@ -52,11 +57,15 @@ if not st.session_state.user_name or not st.session_state.user_class:
             st.warning("Vui lòng nhập đủ Họ tên và Lớp.")
     st.stop()
 
-# -------------------------- HELPERS --------------------------
+# --------------------------
+# HELPERS
+# --------------------------
 def call_gemini_text(model, user_prompt):
+    """Gọi Gemini v1beta: generateText chuẩn, loại bỏ temperature/maxOutputTokens"""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
     full_prompt = f"{SYSTEM_INSTRUCTION}\n\n[Đề bài]: {user_prompt}"
-    payload = {"content": [{"role": "user", "text": full_prompt}]}
+    payload = {"content":[{"role":"user","text":full_prompt}]}
+
     try:
         res = requests.post(url, json=payload, timeout=60)
         res.raise_for_status()
@@ -68,25 +77,28 @@ def call_gemini_text(model, user_prompt):
         return None, f"Lỗi API văn bản: {error_detail}"
 
 def call_gemini_image(model, prompt):
+    """Tạo ảnh v1beta"""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateImage?key={API_KEY}"
-    payload = {"content": [{"role": "user", "text": prompt}]}
+    payload = {"content":[{"role":"user","text":prompt}]}
+
     try:
         res = requests.post(url, json=payload, timeout=90)
         res.raise_for_status()
         data = res.json()
+        # Lấy URL ảnh
         for candidate in data.get("candidates", []):
             for part in candidate.get("content", []):
                 if "imageUri" in part:
                     return part["imageUri"], None
-        return None, "Không tìm thấy media (ảnh) trong phản hồi."
+        return None, "Không tìm thấy media (ảnh)."
     except Exception as e:
         error_detail = res.text if 'res' in locals() else str(e)
         return None, f"Lỗi API ảnh: {error_detail}"
 
-def store_image_entry(question_text, img_b64, style_key):
+def store_image_entry(question_text, img_url, style_key):
     img_id = str(uuid.uuid4())
     st.session_state.image_history.append({
-        "id": img_id, "question": question_text, "b64": img_b64, "style": style_key,
+        "id": img_id, "question": question_text, "url": img_url, "style": style_key,
         "time": datetime.utcnow().isoformat()
     })
     return img_id
@@ -95,7 +107,7 @@ def speak_text(text):
     try:
         from gtts import gTTS
         fp = io.BytesIO()
-        clean_text = text.replace("**", "").replace("$", "").replace("\\", "")
+        clean_text = text.replace("**","").replace("$","").replace("\\","")
         tts = gTTS(text=clean_text, lang="vi")
         tts.write_to_fp(fp)
         fp.seek(0)
@@ -103,7 +115,9 @@ def speak_text(text):
     except Exception as e:
         st.warning("Không thể tạo giọng nói: " + str(e))
 
-# -------------------------- SIDEBAR --------------------------
+# --------------------------
+# SIDEBAR
+# --------------------------
 with st.sidebar:
     st.markdown(f"### Xin chào, {st.session_state.user_name} - Lớp {st.session_state.user_class}")
     chosen_label = st.selectbox("Chọn model Gemini", list(MODEL_OPTIONS.keys()))
@@ -111,38 +125,43 @@ with st.sidebar:
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
 
-# -------------------------- MAIN UI --------------------------
+# --------------------------
+# MAIN UI
+# --------------------------
 col_left, col_right = st.columns([3,2])
 with col_left:
-    st.subheader("Nhập đề bài / câu hỏi")
-    user_q = st.text_area("", value=st.session_state.get("user_input",""), height=150)
-    st.session_state.user_input = user_q
+    st.subheader("💬 Hộp chat")
+    chat_container = st.empty()
 
-    btn_send = st.button("Gửi câu hỏi")
-    btn_image = st.button("Tạo ảnh minh họa")
-
-    chat_container = st.container()
     def show_chat():
-        with chat_container:
-            # Reverse order: câu mới lên trên
+        with chat_container.container():
+            # Đẩy câu mới lên trên
             for m in reversed(st.session_state.chat_history):
                 role = m["role"]
-                bg_color = "#dff9fb" if role=="assistant" else "#fce4ec"
-                st.markdown(f"""
-                    <div style='background:{bg_color}; padding:10px; border-radius:10px; margin-bottom:6px;'>
-                        {m.get('text','')}
-                    </div>
-                """, unsafe_allow_html=True)
-                if m.get("image_b64"):
-                    st.image(base64.b64decode(m["image_b64"]), use_column_width=True)
+                with st.chat_message(role):
+                    st.markdown(m['text'])
+                    if m.get("image_url"):
+                        st.image(m["image_url"], use_column_width=True)
+    
     show_chat()
 
-# -------------------------- ACTION: Gửi câu hỏi --------------------------
+    # Hộp nhập câu hỏi luôn ở dưới cùng
+    user_q = st.text_area("Nhập đề bài / câu hỏi", value=st.session_state.get("user_input",""), height=120)
+    st.session_state.user_input = user_q
+    col_send, col_image = st.columns([1,1])
+    with col_send:
+        btn_send = st.button("Gửi câu hỏi")
+    with col_image:
+        btn_image = st.button("Tạo ảnh minh họa")
+
+# --------------------------
+# ACTION: Gửi câu hỏi
+# --------------------------
 if btn_send and user_q.strip():
     st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
-    with st.spinner("⏳ Đang tạo lời giải..."):
+    with st.spinner("⏳ Gia sư ảo đang suy nghĩ..."):
         answer_text, err = call_gemini_text(st.session_state.chosen_model, user_q)
-        if err: 
+        if err:
             st.error(err)
             st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi: {err}"})
         else:
@@ -151,27 +170,25 @@ if btn_send and user_q.strip():
     st.session_state.user_input = ""
     st.rerun()
 
-# -------------------------- ACTION: Tạo ảnh minh họa --------------------------
+# --------------------------
+# ACTION: Tạo ảnh minh họa
+# --------------------------
 if btn_image and user_q.strip():
     img_prompt = f"Educational illustration with style '{style}': {user_q}."
     st.session_state.chat_history.append({"role":"user","text":f"[Yêu cầu tạo ảnh]: {user_q}"})
     with st.spinner("🎨 Đang tạo ảnh minh họa..."):
-        img_b64, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
-        if img_err: 
-            st.error("Không tạo được ảnh: " + img_err)
-            st.session_state.chat_history.append({"role":"assistant", "text": f"❌ Lỗi tạo ảnh: {img_err}"})
+        img_url, img_err = call_gemini_image(st.session_state.chosen_model, img_prompt)
+        if img_err:
+            st.error(img_err)
+            st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi tạo ảnh: {img_err}"})
         else:
-            st.session_state.chat_history.append({
-                "role":"assistant",
-                "text":"**[Ảnh minh họa đã tạo]**",
-                "image_b64": img_b64
-            })
-            store_image_entry(user_q, img_b64, style)
+            st.session_state.chat_history.append({"role":"assistant","text":"**[Ảnh minh họa đã tạo]**","image_url": img_url})
+            store_image_entry(user_q, img_url, style)
     st.session_state.user_input = ""
     st.rerun()
 
 with col_right:
     st.subheader("📂 Nhật ký ảnh")
     for entry in reversed(st.session_state.image_history[-6:]):
-        st.image(base64.b64decode(entry["b64"]), width=160)
+        st.image(entry["url"], width=160)
         st.write(f"📝 {entry['question'][:50]}...")
