@@ -1,6 +1,6 @@
-# app_gia_su_ao_v1beta.py
+# app_gia_su_ao_pro.py
 import streamlit as st
-import requests, base64, uuid, io
+import requests, base64, uuid, io, html
 from datetime import datetime
 
 # --------------------------
@@ -40,16 +40,16 @@ for key in ["chat_history","image_history","user_input","chosen_model","user_nam
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
-        <div style="text-align:center;">
+        <div style="text-align:center; background: linear-gradient(to right, #74ebd5, #ACB6E5); padding:30px; border-radius:12px; margin-bottom:20px;">
             <img src="https://i.imgur.com/4AiXzf8.png" width="120" style="border-radius:50%;"/>
-            <h1 style='color:#2c3e50'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>
-            <h4 style='color:#7f8c8d'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
+            <h1 style='color:#2c3e50; margin:10px;'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>
+            <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
     """, unsafe_allow_html=True)
     col1, col2 = st.columns([1,1])
     with col1: name_input = st.text_input("Họ và tên")
     with col2: class_input = st.text_input("Lớp")
-    if st.button("Đăng nhập"):
+    if st.button("Đăng nhập", use_container_width=True):
         if name_input.strip() and class_input.strip():
             st.session_state.user_name = name_input.strip()
             st.session_state.user_class = class_input.strip()
@@ -62,32 +62,14 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # HELPERS
 # --------------------------
 def call_gemini_text(model, user_prompt, image_b64_inline=None):
-    """
-    Gọi Gemini API generateText chuẩn v1beta.
-    """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
-    
-    # Cấu trúc input chuẩn
-    instances_input = [
-        {
-            "input": [
-                {"role": "system", "content": SYSTEM_INSTRUCTION},
-                {"role": "user", "content": user_prompt}
-            ]
-        }
-    ]
+    instances_input = [{"input":[{"role":"system","content":SYSTEM_INSTRUCTION},{"role":"user","content":user_prompt}]}]
     if image_b64_inline:
-        instances_input[0]["input"].append({
-            "role":"user",
-            "content": {"type":"image", "image":{"mimeType":"image/png","data":image_b64_inline}}
-        })
-
+        instances_input[0]["input"].append({"role":"user","content":{"type":"image","image":{"mimeType":"image/png","data":image_b64_inline}}})
     payload = {"instances": instances_input, "parameters":{"temperature":0.2,"candidateCount":1}}
-
     try:
-        res = requests.post(url, json=payload, timeout=45)
-        if res.status_code != 200:
-            return None, f"API trả lỗi {res.status_code}: {res.text[:300]}"
+        res = requests.post(url,json=payload,timeout=45)
+        if res.status_code != 200: return None, f"API trả lỗi {res.status_code}: {res.text[:300]}"
         data = res.json()
         answer_text = data["predictions"][0]["content"][0]["text"]
         return answer_text, None
@@ -98,7 +80,7 @@ def call_gemini_image(model, prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {"contents":[{"role":"user","parts":[{"text":prompt}]}]}
     try:
-        res = requests.post(url, json=payload, timeout=90)
+        res = requests.post(url,json=payload,timeout=90)
         data = res.json()
         for p in data["candidates"][0]["content"]["parts"]:
             if "media" in p: return p["media"]["data"], None
@@ -133,6 +115,8 @@ with st.sidebar:
     st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
+    st.markdown("---")
+    st.caption("Phiên bản Pro với giao diện gradient & button đẹp mắt")
 
 # --------------------------
 # MAIN UI
@@ -143,6 +127,24 @@ with col_left:
     st.subheader("Nhập đề bài / câu hỏi")
     user_q = st.text_area("", value=st.session_state.get("user_input",""), height=150)
     st.session_state.user_input = user_q
+
+    # Buttons gradient
+    btn_css = """
+        <style>
+        .stButton>button {
+            background: linear-gradient(90deg, #ff758c, #ff7eb3);
+            color: white;
+            font-weight: bold;
+            border-radius:10px;
+            height:40px;
+            width:100%;
+            transition: transform 0.1s;
+        }
+        .stButton>button:hover {transform: scale(1.05);}
+        </style>
+    """
+    st.markdown(btn_css, unsafe_allow_html=True)
+
     btn_send = st.button("Gửi lời giải")
     btn_image = st.button("Tạo ảnh minh họa")
 
@@ -153,22 +155,19 @@ with col_left:
                 """
                 <style>
                 .chat-box {border-radius:12px; padding:12px; max-height:500px; overflow-y:auto; background:#fefefe; box-shadow:0 6px 18px rgba(0,0,0,0.12);}
-                .user-msg {background:#fce4ec; padding:10px; border-radius:10px; margin-bottom:6px; transition: transform 0.1s;}
-                .user-msg:hover {transform: scale(1.02);}
-                .ai-msg {background:#dff9fb; padding:10px; border-radius:10px; margin-bottom:6px; transition: transform 0.1s;}
-                .ai-msg:hover {transform: scale(1.02);}
-                .latex {color:#2c3e50; font-weight:bold;}
+                .user-msg {background:linear-gradient(120deg, #ffd1dc, #ffecf1); padding:10px; border-radius:10px; margin-bottom:6px;}
+                .ai-msg {background:linear-gradient(120deg, #d0f0fd, #a0e7f5); padding:10px; border-radius:10px; margin-bottom:6px;}
                 </style>
                 <div class="chat-box">
                 """, unsafe_allow_html=True
             )
             for m in st.session_state.chat_history[-20:]:
                 cls = "ai-msg" if m["role"]=="assistant" else "user-msg"
-                msg_text = m['text'].replace("$","<span class='latex'>$")+"</span>" if "$" in m['text'] else m['text']
+                msg_text = html.escape(m['text']).replace("\n","<br>")
                 st.markdown(f"<div class='{cls}'>{msg_text}</div>", unsafe_allow_html=True)
-                if m.get("image"): 
-                    st.image(m["image"], use_column_width=True)
-                    st.download_button("📥 Tải ảnh", data=m["image"], file_name=f"minh_hoa_{uuid.uuid4().hex[:6]}.png", mime="image/png")
+                if m.get("image_b64"): 
+                    st.image(base64.b64decode(m["image_b64"]), use_column_width=True)
+                    st.download_button("📥 Tải ảnh", data=base64.b64decode(m["image_b64"]), file_name=f"minh_hoa_{uuid.uuid4().hex[:6]}.png", mime="image/png")
             st.markdown("</div>", unsafe_allow_html=True)
 
     show_chat()
@@ -198,7 +197,7 @@ if btn_image and user_q.strip():
             st.session_state.chat_history.append({
                 "role":"assistant",
                 "text":"[Ảnh minh họa]",
-                "image": base64.b64decode(img_b64),
+                "image_b64": img_b64,
                 "time": datetime.utcnow().isoformat()
             })
             store_image_entry(user_q, img_b64, style)
