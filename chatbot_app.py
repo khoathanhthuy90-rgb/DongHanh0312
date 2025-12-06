@@ -1,4 +1,4 @@
-# app_gia_su_ao_v1beta_fix.py
+# app_gia_su_ao_v1beta_final.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -61,23 +61,19 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # --------------------------
 # HELPERS
 # --------------------------
-def call_gemini_text(model, user_prompt, image_b64_inline=None):
-    """
-    Gọi Gemini v1beta chuẩn với 'contents'
-    """
+def call_gemini_text(model, user_prompt):
+    """Gọi Gemini v1beta chuẩn với prompt.messages"""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-    
-    contents = [
-        {"role":"system", "parts":[{"text": SYSTEM_INSTRUCTION}]},
-        {"role":"user", "parts":[{"text": user_prompt}]}
-    ]
-    if image_b64_inline:
-        contents[1]["parts"].append({
-            "inlineData": {"mimeType":"image/png","data":image_b64_inline}
-        })
-
-    payload = {"contents": contents}
-
+    payload = {
+        "prompt": {
+            "messages": [
+                {"author":"system","content":[{"type":"text","text": SYSTEM_INSTRUCTION}]},
+                {"author":"user","content":[{"type":"text","text": user_prompt}]}
+            ]
+        },
+        "temperature":0.2,
+        "candidate_count":1
+    }
     try:
         res = requests.post(url, json=payload, timeout=45)
         res.raise_for_status()
@@ -89,9 +85,18 @@ def call_gemini_text(model, user_prompt, image_b64_inline=None):
 
 def call_gemini_image(model, prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-    payload = {"contents":[{"role":"user","parts":[{"text":prompt}]}]}
+    payload = {
+        "prompt": {
+            "messages": [
+                {"author":"user","content":[{"type":"text","text": prompt}]}
+            ]
+        },
+        "temperature":0.2,
+        "candidate_count":1
+    }
     try:
         res = requests.post(url, json=payload, timeout=90)
+        res.raise_for_status()
         data = res.json()
         for p in data["candidates"][0]["content"]:
             if "media" in p: return p["media"]["data"], None
@@ -126,8 +131,6 @@ with st.sidebar:
     st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
-    st.markdown("---")
-    st.caption("Pro: giao diện đẹp, chat + TTS + tạo ảnh khi cần")
 
 # --------------------------
 # MAIN UI
