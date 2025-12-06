@@ -122,7 +122,7 @@ def set_pending_action(action_type):
 
 
 # --------------------------
-# LOGIN (KHẮC PHỤC LỖI HIỂN THỊ CHỮ)
+# LOGIN (FIX LỖI HIỂN THỊ CHỮ: Đặt nền trắng cho h2)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
@@ -134,7 +134,7 @@ if not st.session_state.user_name or not st.session_state.user_class:
                     margin-bottom:20px;">
             <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
             
-            <h2 style='color:#2c3e50; margin:10px; font-size: 28px; background: white; padding: 5px; border-radius: 5px;'>GIA SƯ ẢO CỦA BẠN</h2>
+            <h2 style='color:#2c3e50; margin:10px; font-size: 28px; **background: white; padding: 5px; border-radius: 5px;**'>GIA SƯ ẢO CỦA BẠN</h2>
             
             <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
