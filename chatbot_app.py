@@ -1,4 +1,4 @@
-# app_gia_su_final_v3.py (Code giữ nguyên tính năng và đã tối ưu UI)
+# app_gia_su_ao_stable_restore.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -47,6 +47,7 @@ def call_gemini_text(model, user_prompt):
     user_name = st.session_state.get("user_name", "học sinh")
     user_class = st.session_state.get("user_class", "Chưa rõ")
     
+    # Cá nhân hóa
     personal_context = (
         f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
         "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
@@ -114,7 +115,7 @@ def set_pending_action(action_type):
 
 
 # --------------------------
-# LOGIN (UI ĐÃ CẬP NHẬT)
+# LOGIN (KHÔI PHỤC UI ỔN ĐỊNH)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
@@ -126,9 +127,9 @@ if not st.session_state.user_name or not st.session_state.user_class:
                     margin-bottom:20px;">
             <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
             
-            <h2 style='color:#2c3e50; margin:10px; font-size: 24px;'>GIA SƯ ẢO CỦA BẠN</h2>
+            <h2 style='color:#2c3e50; margin:10px; font-size: 28px;'>GIA SƯ ẢO CỦA BẠN</h2>
             
-            <h4 style='color:#007bff; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
+            <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
     """, unsafe_allow_html=True)
     col1, col2 = st.columns([1,1])
@@ -173,7 +174,6 @@ with st.container():
 
         def show_chat():
             with chat_container:
-                # Hiển thị tin nhắn mới nhất ở dưới cùng
                 for msg in st.session_state.chat_history: 
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
