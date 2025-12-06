@@ -1,6 +1,6 @@
-# app_gia_su_ao_pro.py
+# app_gia_su_ao_v1beta_fix.py
 import streamlit as st
-import requests, base64, uuid, io, html
+import requests, base64, uuid, io
 from datetime import datetime
 
 # --------------------------
@@ -62,27 +62,38 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # HELPERS
 # --------------------------
 def call_gemini_text(model, user_prompt, image_b64_inline=None):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
-    instances_input = [{"input":[{"role":"system","content":SYSTEM_INSTRUCTION},{"role":"user","content":user_prompt}]}]
+    """
+    Gọi Gemini v1beta chuẩn với 'contents'
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
+    
+    contents = [
+        {"role":"system", "parts":[{"text": SYSTEM_INSTRUCTION}]},
+        {"role":"user", "parts":[{"text": user_prompt}]}
+    ]
     if image_b64_inline:
-        instances_input[0]["input"].append({"role":"user","content":{"type":"image","image":{"mimeType":"image/png","data":image_b64_inline}}})
-    payload = {"instances": instances_input, "parameters":{"temperature":0.2,"candidateCount":1}}
+        contents[1]["parts"].append({
+            "inlineData": {"mimeType":"image/png","data":image_b64_inline}
+        })
+
+    payload = {"contents": contents}
+
     try:
-        res = requests.post(url,json=payload,timeout=45)
-        if res.status_code != 200: return None, f"API trả lỗi {res.status_code}: {res.text[:300]}"
+        res = requests.post(url, json=payload, timeout=45)
+        res.raise_for_status()
         data = res.json()
-        answer_text = data["predictions"][0]["content"][0]["text"]
-        return answer_text, None
+        text = data["candidates"][0]["content"][0].get("text","")
+        return text, None
     except Exception as e:
-        return None, f"Lỗi kết nối/gọi API: {str(e)}"
+        return None, f"Lỗi API: {e}"
 
 def call_gemini_image(model, prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {"contents":[{"role":"user","parts":[{"text":prompt}]}]}
     try:
-        res = requests.post(url,json=payload,timeout=90)
+        res = requests.post(url, json=payload, timeout=90)
         data = res.json()
-        for p in data["candidates"][0]["content"]["parts"]:
+        for p in data["candidates"][0]["content"]:
             if "media" in p: return p["media"]["data"], None
         return None, "Không tìm thấy media"
     except Exception as e: return None, str(e)
@@ -116,71 +127,54 @@ with st.sidebar:
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
     tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
     st.markdown("---")
-    st.caption("Phiên bản Pro với giao diện gradient & button đẹp mắt")
+    st.caption("Pro: giao diện đẹp, chat + TTS + tạo ảnh khi cần")
 
 # --------------------------
 # MAIN UI
 # --------------------------
 col_left, col_right = st.columns([3,2])
-
 with col_left:
     st.subheader("Nhập đề bài / câu hỏi")
     user_q = st.text_area("", value=st.session_state.get("user_input",""), height=150)
     st.session_state.user_input = user_q
 
-    # Buttons gradient
-    btn_css = """
-        <style>
-        .stButton>button {
-            background: linear-gradient(90deg, #ff758c, #ff7eb3);
-            color: white;
-            font-weight: bold;
-            border-radius:10px;
-            height:40px;
-            width:100%;
-            transition: transform 0.1s;
-        }
-        .stButton>button:hover {transform: scale(1.05);}
-        </style>
-    """
-    st.markdown(btn_css, unsafe_allow_html=True)
-
-    btn_send = st.button("Gửi lời giải")
+    btn_send = st.button("Gửi câu hỏi")
     btn_image = st.button("Tạo ảnh minh họa")
 
     chat_container = st.empty()
     def show_chat():
         with chat_container:
-            st.markdown(
-                """
+            st.markdown("""
                 <style>
                 .chat-box {border-radius:12px; padding:12px; max-height:500px; overflow-y:auto; background:#fefefe; box-shadow:0 6px 18px rgba(0,0,0,0.12);}
-                .user-msg {background:linear-gradient(120deg, #ffd1dc, #ffecf1); padding:10px; border-radius:10px; margin-bottom:6px;}
-                .ai-msg {background:linear-gradient(120deg, #d0f0fd, #a0e7f5); padding:10px; border-radius:10px; margin-bottom:6px;}
+                .user-msg {background:#ffd1dc; padding:10px; border-radius:10px; margin-bottom:6px;}
+                .ai-msg {background:#d0f0fd; padding:10px; border-radius:10px; margin-bottom:6px;}
                 </style>
                 <div class="chat-box">
-                """, unsafe_allow_html=True
-            )
+            """, unsafe_allow_html=True)
             for m in st.session_state.chat_history[-20:]:
                 cls = "ai-msg" if m["role"]=="assistant" else "user-msg"
-                msg_text = html.escape(m['text']).replace("\n","<br>")
+                msg_text = m['text'].replace("\n","<br>")
                 st.markdown(f"<div class='{cls}'>{msg_text}</div>", unsafe_allow_html=True)
-                if m.get("image_b64"): 
+                if m.get("image_b64"):
                     st.image(base64.b64decode(m["image_b64"]), use_column_width=True)
-                    st.download_button("📥 Tải ảnh", data=base64.b64decode(m["image_b64"]), file_name=f"minh_hoa_{uuid.uuid4().hex[:6]}.png", mime="image/png")
+                    st.download_button("📥 Tải ảnh", data=base64.b64decode(m["image_b64"]),
+                                       file_name=f"minh_hoa_{uuid.uuid4().hex[:6]}.png", mime="image/png")
             st.markdown("</div>", unsafe_allow_html=True)
-
     show_chat()
 
 # --------------------------
-# ACTION: Gửi lời giải
+# ACTION: Gửi câu hỏi
 # --------------------------
 if btn_send and user_q.strip():
+    # Hiển thị câu hỏi ngay
+    st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
+    show_chat()
+
     with st.spinner("⏳ Đang tạo lời giải..."):
         answer_text, err = call_gemini_text(st.session_state.chosen_model, user_q)
         if err: st.error(err)
         else:
-            st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
             st.session_state.chat_history.append({"role":"assistant","text":answer_text,"time":datetime.utcnow().isoformat()})
             if tts_enabled: speak_text(answer_text)
     show_chat()
