@@ -1,4 +1,4 @@
-# app_gia_su_ao_v7.py (Đã sửa lỗi JSON Payload)
+# app_gia_su_ao_v_final.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -11,12 +11,13 @@ if not API_KEY:
     st.error("⚠️ Thiếu GEMINI_API_KEY trong .streamlit/secrets.toml")
     st.stop()
 
-# Giữ nguyên cấu hình
+# Đã cập nhật tên mô hình chuẩn của Gemini
 MODEL_OPTIONS = {
     "Gemini 2.5 Flash": "gemini-2.5-flash",
     "Gemini 2.5 Pro": "gemini-2.5-pro", 
 }
 
+# SYSTEM_INSTRUCTION được giữ lại để nhúng vào prompt
 SYSTEM_INSTRUCTION = (
     "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. "
     "Trình bày rõ ràng, dùng LaTeX khi cần."
@@ -59,23 +60,23 @@ if not st.session_state.user_name or not st.session_state.user_class:
     st.stop()
 
 # --------------------------
-# HELPERS (ĐÃ SỬA LỖI CONFIG)
+# HELPERS (Sửa lỗi: Loại bỏ 'config', nhúng system instruction vào prompt)
 # --------------------------
 def call_gemini_text(model, user_prompt):
-    """ Sửa lỗi: Đảm bảo payload và endpoint tuân thủ Gemini API. """
+    """ Sửa lỗi JSON 400: Loại bỏ 'config', đưa tham số lên cấp cao nhất. """
+    # Endpoint v1beta/models/{model}:generateContent
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     
-    # Payload chuẩn của Gemini
+    # Nhúng System Instruction vào đầu prompt
+    full_prompt = f"{SYSTEM_INSTRUCTION}\n\n[Đề bài]: {user_prompt}"
+
+    # Payload đã sửa lỗi: Không dùng "config"
     payload = {
         "contents": [
-            {"role": "user", "parts": [{"text": user_prompt}]}
+            {"role": "user", "parts": [{"text": full_prompt}]}
         ],
-        # System Instruction phải được đặt ở cấp độ cấu hình (config)
-        "config": {
-            "systemInstruction": SYSTEM_INSTRUCTION,
-            "temperature": 0.2,
-            "maxOutputTokens": 2048
-        }
+        "temperature": 0.2,
+        "maxOutputTokens": 2048
     }
     try:
         res = requests.post(url, json=payload, timeout=60)
@@ -89,17 +90,15 @@ def call_gemini_text(model, user_prompt):
         return None, f"Lỗi API văn bản: {error_detail}"
 
 def call_gemini_image(model, prompt):
-    """ Sửa lỗi: Đảm bảo payload và endpoint tuân thủ Gemini API. """
+    """ Sửa lỗi JSON 400: Loại bỏ 'config'. """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     
-    # Payload chuẩn của Gemini
+    # Payload đã sửa lỗi: Không dùng "config"
     payload = {
         "contents": [
             {"role": "user", "parts": [{"text": prompt}]}
         ],
-        "config": {
-            "temperature": 0.2,
-        }
+        "temperature": 0.2,
     }
     
     try:
@@ -165,7 +164,7 @@ with col_left:
     chat_container = st.empty()
     def show_chat():
         with chat_container.container():
-            # Sử dụng st.chat_message
+            # Sử dụng st.chat_message (tính năng mới)
             for m in st.session_state.chat_history:
                 role = m["role"]
                 with st.chat_message(role):
@@ -178,7 +177,7 @@ with col_left:
     show_chat()
 
 # --------------------------
-# ACTION: Gửi câu hỏi
+# ACTION: Gửi câu hỏi (Giữ tính năng st.rerun)
 # --------------------------
 if btn_send and user_q.strip():
     st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
@@ -196,7 +195,7 @@ if btn_send and user_q.strip():
     st.rerun()
 
 # --------------------------
-# ACTION: Tạo ảnh minh họa
+# ACTION: Tạo ảnh minh họa (Giữ tính năng st.rerun)
 # --------------------------
 if btn_image and user_q.strip():
     img_prompt = f"Educational illustration with style '{style}': {user_q}."
@@ -222,6 +221,7 @@ if btn_image and user_q.strip():
 
 with col_right:
     st.subheader("📂 Nhật ký ảnh")
+    # Giữ nguyên logic hiển thị ảnh ở cột phải
     for entry in reversed(st.session_state.image_history[-6:]):
         st.image(base64.b64decode(entry["b64"]), width=160)
         st.write(f"📝 {entry['question'][:50]}...")
