@@ -1,4 +1,4 @@
-# app_gia_su_ao_final_stable.py
+# app_gia_su_ao_final_stable_markdown_fix.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -49,7 +49,7 @@ def call_gemini_text(model, user_prompt):
     user_name = st.session_state.get("user_name", "học sinh")
     user_class = st.session_state.get("user_class", "Chưa rõ")
     
-    # Thêm context cá nhân hóa (Tính năng GIỮ LẠI)
+    # Thêm context cá nhân hóa
     personal_context = (
         f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
         "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
@@ -99,7 +99,7 @@ def store_image_entry(question_text, img_b64, style_key):
     return img_id
 
 def speak_text(text):
-    """Tính năng Text-to-Speech (GIỮ LẠI)."""
+    """Tính năng Text-to-Speech sử dụng gTTS."""
     try:
         from gtts import gTTS
         fp = io.BytesIO()
@@ -113,7 +113,7 @@ def speak_text(text):
          st.warning("Không thể tạo giọng nói.")
 
 def set_pending_action(action_type):
-    """Callback để xử lý sự kiện nút bấm và xóa input (GIỮ LẠI)."""
+    """Callback để xử lý sự kiện nút bấm và xóa input."""
     q = st.session_state.user_input_area.strip()
     if not q: return
     st.session_state["temp_question"] = q
@@ -122,23 +122,24 @@ def set_pending_action(action_type):
 
 
 # --------------------------
-# LOGIN (FIX LỖI HIỂN THỊ CHỮ)
+# LOGIN (FIX LỖI HIỂN THỊ CHỮ BẰNG MARKDOWN ĐƠN GIẢN HÓA)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
         <div style="text-align:center; 
-                    /* Giữ nền tươi sáng cho khối login tổng thể */
+                    /* Nền tươi sáng cho khối login tổng thể */
                     background: linear-gradient(to right, #a1c4fd, #c2e9fb); 
                     padding:30px; 
                     border-radius:12px; 
                     margin-bottom:20px;">
             <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
             
-            <h2 style='color:#2c3e50; margin:10px; font-size: 28px; background: white; padding: 5px; border-radius: 5px;'>GIA SƯ ẢO CỦA BẠN</h2>
+            <h1 style='color:#2c3e50;'>GIA SƯ ẢO CỦA BẠN</h1>
             
-            <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
+            <p style='color:#7f8c8d; font-size: 1.2em;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</p>
         </div>
-    """, unsafe_allow_html=True)
+    """, unsafe_allow_html=True) # Sử dụng h1 và p để tránh xung đột CSS inline
+    
     col1, col2 = st.columns([1,1])
     with col1: name_input = st.text_input("Họ và tên", value=st.session_state.user_name)
     with col2: class_input = st.text_input("Lớp", value=st.session_state.user_class)
@@ -171,7 +172,7 @@ with st.container():
     
     with col_right:
         st.subheader("📂 Nhật ký ảnh")
-        # Hiển thị 6 ảnh gần nhất (GIỮ LẠI)
+        # Hiển thị 6 ảnh gần nhất
         for entry in reversed(st.session_state.image_history[-6:]):
             try:
                 # Cần decode base64 sang bytes trước khi hiển thị
@@ -205,7 +206,7 @@ with st.container():
                     
                     if msg.get("image_b64"):
                         try:
-                            # Cần decode base64 sang bytes trước khi hiển thị (GIỮ LẠI)
+                            # Cần decode base64 sang bytes trước khi hiển thị
                             st.image(base64.b64decode(msg["image_b64"]), use_column_width=True)
                         except Exception:
                             st.error("Lỗi hiển thị ảnh.")
@@ -256,11 +257,4 @@ if st.session_state.get("pending_action"):
 # --------------------------
 # USER INPUT AREA
 # --------------------------
-user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_input_area") 
-col1_btn, col2_btn = st.columns([1,1])
-
-with col1_btn:
-    st.button("Gửi câu hỏi", use_container_width=True, type="primary", on_click=set_pending_action, args=("text",))
-
-with col2_btn:
-    st.button("Tạo ảnh minh họa", use_container_width=True, on_click=set_pending_action, args=("image",))
+user_q = st.text_
