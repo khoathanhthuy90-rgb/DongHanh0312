@@ -1,4 +1,4 @@
-# app_gia_su_ao_v1beta_final.py
+# app_gia_su_ao_v2.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -62,7 +62,6 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # HELPERS
 # --------------------------
 def call_gemini_text(model, user_prompt):
-    """Gọi Gemini v1beta chuẩn với prompt.messages"""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
     payload = {
         "prompt": {
@@ -71,8 +70,8 @@ def call_gemini_text(model, user_prompt):
                 {"author":"user","content":[{"type":"text","text": user_prompt}]}
             ]
         },
-        "temperature":0.2,
-        "candidate_count":1
+        "temperature": 0.2,
+        "candidate_count": 1
     }
     try:
         res = requests.post(url, json=payload, timeout=45)
@@ -84,7 +83,6 @@ def call_gemini_text(model, user_prompt):
         return None, f"Lỗi API: {e}"
 
 def call_gemini_image(model, prompt):
-    """Tạo ảnh qua generateContent"""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {
         "prompt": {
@@ -173,7 +171,6 @@ with col_left:
 # ACTION: Gửi câu hỏi
 # --------------------------
 if btn_send and user_q.strip():
-    # Hiển thị câu hỏi ngay
     st.session_state.chat_history.append({"role":"user","text":user_q,"time":datetime.utcnow().isoformat()})
     show_chat()
 
