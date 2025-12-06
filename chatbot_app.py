@@ -1,4 +1,4 @@
-# app_gia_su_ao_v10_final.py (Code giữ nguyên tính năng và đã tối ưu)
+# app_gia_su_final_v3.py (Code giữ nguyên tính năng và đã tối ưu UI)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -8,7 +8,7 @@ from datetime import datetime
 # --------------------------
 API_KEY = st.secrets.get("GEMINI_API_KEY", "").strip()
 if not API_KEY:
-    st.error("⚠️ Thiếu GEMINI_API_KEY trong .streamlit/secrets.toml")
+    st.error("⚠️ Thiếu GEMINI_API_KEY trong .streamlit/secrets.toml. Vui lòng kiểm tra lại cấu hình.")
     st.stop()
 
 MODEL_OPTIONS = {
@@ -36,7 +36,7 @@ for key in ["chat_history", "image_history", "chosen_model"]:
         
 for key in ["user_name", "user_class", "user_input_area", "pending_action", "temp_question", "tts_enabled", "style"]:
     if key not in st.session_state:
-        st.session_state[key] = ""
+        st.session_state[key] = "" if key not in ["tts_enabled"] else False
 
 
 # --------------------------
@@ -46,6 +46,7 @@ def call_gemini_text(model, user_prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     user_name = st.session_state.get("user_name", "học sinh")
     user_class = st.session_state.get("user_class", "Chưa rõ")
+    
     personal_context = (
         f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
         "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
@@ -96,7 +97,7 @@ def speak_text(text):
     try:
         from gtts import gTTS
         fp = io.BytesIO()
-        clean_text = text.replace("**","").replace("$","").replace("\\","")
+        clean_text = text.replace("**","").replace("$","").replace("\\","").replace("{","").replace("}","")
         tts = gTTS(text=clean_text, lang="vi")
         tts.write_to_fp(fp)
         fp.seek(0)
@@ -113,21 +114,21 @@ def set_pending_action(action_type):
 
 
 # --------------------------
-# LOGIN
+# LOGIN (UI ĐÃ CẬP NHẬT)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
         <div style="text-align:center; 
-                    /* Màu nền đã chỉnh */
+                    /* Màu nền tươi sáng */
                     background: linear-gradient(to right, #a1c4fd, #c2e9fb); 
                     padding:30px; 
                     border-radius:12px; 
                     margin-bottom:20px;">
             <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
             
-            <h2 style='color:#2c3e50; margin:10px; font-size: 28px;'>GIA SƯ ẢO CỦA BẠN</h2>
+            <h2 style='color:#2c3e50; margin:10px; font-size: 24px;'>GIA SƯ ẢO CỦA BẠN</h2>
             
-            <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
+            <h4 style='color:#007bff; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
     """, unsafe_allow_html=True)
     col1, col2 = st.columns([1,1])
@@ -146,11 +147,11 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # SIDEBAR
 # --------------------------
 with st.sidebar:
-    st.markdown(f"### Xin chào, {st.session_state.user_name} - Lớp {st.session_state.user_class}")
+    st.markdown(f"### Xin chào, **{st.session_state.user_name}** - Lớp **{st.session_state.user_class}**")
     chosen_label = st.selectbox("Chọn model Gemini", list(MODEL_OPTIONS.keys()))
     st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
-    tts_enabled = st.checkbox("Bật Text-to-Speech", value=st.session_state.get("tts_enabled", False))
+    tts_enabled = st.checkbox("Bật Text-to-Speech (Đọc lời giải)", value=st.session_state.get("tts_enabled", False))
     st.session_state["tts_enabled"] = tts_enabled 
     st.session_state["style"] = style 
 
@@ -172,6 +173,7 @@ with st.container():
 
         def show_chat():
             with chat_container:
+                # Hiển thị tin nhắn mới nhất ở dưới cùng
                 for msg in st.session_state.chat_history: 
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
@@ -192,7 +194,9 @@ with st.container():
         
         show_chat()
 
-# XỬ LÝ HÀNH ĐỘNG ĐANG CHỜ (API LOGIC)
+# --------------------------
+# API PROCESSING LOGIC
+# --------------------------
 if st.session_state.get("pending_action"):
     q = st.session_state.get("temp_question")
     
@@ -226,7 +230,9 @@ if st.session_state.get("pending_action"):
     st.rerun()
 
 
-# Hộp nhập câu hỏi dưới cùng
+# --------------------------
+# USER INPUT AREA
+# --------------------------
 user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_input_area") 
 col1_btn, col2_btn = st.columns([1,1])
 
