@@ -1,4 +1,4 @@
-# app_gia_su_ao_v4_final.py (Sử dụng Callback để sửa lỗi StreamlitAPIException)
+# app_gia_su_ao_v6_final.py (Đã sửa lỗi hiển thị ảnh Login)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -30,24 +30,23 @@ st.set_page_config(page_title="Gia Sư Ảo", layout="wide", page_icon="🤖")
 # --------------------------
 # SESSION INIT
 # --------------------------
-for key in ["chat_history", "image_history", "chosen_model", "user_name", "user_class", "user_input_area"]:
+for key in ["chat_history", "image_history", "chosen_model"]:
     if key not in st.session_state:
-        # Khởi tạo chuỗi rỗng cho tất cả các keys này (vì list được tạo bằng [] ban đầu)
-        st.session_state[key] = "" if key not in ["chat_history", "image_history"] else []
-
+        st.session_state[key] = []
+        
+for key in ["user_name", "user_class", "user_input_area", "pending_action", "temp_question"]:
+    if key not in st.session_state:
+        st.session_state[key] = ""
 
 # --------------------------
-# HELPERS & CALLBACKS (ĐÃ THÊM)
+# HELPERS & CALLBACKS (Giữ nguyên logic API đã sửa lỗi)
 # --------------------------
 def call_gemini_text(model, user_prompt):
-    """ Logic gọi API Text (Giữ nguyên cú pháp đã sửa lỗi JSON) """
+    """ Payload tối thiểu, không dùng temperature/maxOutputTokens. """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     full_prompt = f"{SYSTEM_INSTRUCTION}\n\n[Đề bài]: {user_prompt}"
-    
     payload = {
-        "contents": [{"role":"user", "parts":[{"text": full_prompt}]}],
-        "temperature": 0.2,
-        "maxOutputTokens": 2048 
+        "contents": [{"role":"user", "parts":[{"text": full_prompt}]}]
     }
     try:
         res = requests.post(url, json=payload, timeout=60)
@@ -60,22 +59,19 @@ def call_gemini_text(model, user_prompt):
         return None, f"Lỗi API văn bản: {error_detail}"
 
 def call_gemini_image(model, prompt):
-    """ Logic gọi API Image (Giữ nguyên cú pháp đã sửa lỗi JSON) """
+    """ Payload tối thiểu, không dùng temperature. """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {
-        "contents":[{"role":"user","parts":[{"text": prompt}]}],
-        "temperature": 0.2,
+        "contents":[{"role":"user","parts":[{"text": prompt}]}]
     }
     try:
         res = requests.post(url, json=payload, timeout=90)
         res.raise_for_status()
         data = res.json()
-        
         for candidate in data.get("candidates", []):
             for part in candidate.get("content", {}).get("parts", []): 
                 if "inlineData" in part and part["inlineData"]["mimeType"].startswith("image/"):
                     return part["inlineData"]["data"], None
-        
         return None, "Không tìm thấy media (ảnh) trong phản hồi."
     except Exception as e:
         error_detail = res.text if 'res' in locals() else str(e)
@@ -102,53 +98,35 @@ def speak_text(text):
     except Exception:
          st.warning("Không thể tạo giọng nói.")
 
-# CALLBACK FUNCTION (QUAN TRỌNG: CHỈ XỬ LÝ XÓA INPUT)
+# CALLBACK FUNCTION (Giữ nguyên logic sửa lỗi Streamlit State)
 def handle_send_text():
-    """ Xử lý gửi văn bản và kích hoạt API, sau đó xóa input. """
     q = st.session_state.user_input_area.strip()
-    
-    if not q:
-        return # Không làm gì nếu input rỗng
-    
-    # Gán câu hỏi vào biến tạm thời (vì session state sẽ bị xóa ngay sau đó)
+    if not q: return
     st.session_state["temp_question"] = q
-    
-    # Gán giá trị rỗng cho input area (Đây là dòng sửa lỗi chính!)
     st.session_state.user_input_area = ""
-    
-    # Đánh dấu trạng thái là đang xử lý văn bản
     st.session_state["pending_action"] = "text"
 
 def handle_send_image():
-    """ Xử lý gửi yêu cầu tạo ảnh, sau đó xóa input. """
     q = st.session_state.user_input_area.strip()
-    
-    if not q:
-        return # Không làm gì nếu input rỗng
-    
+    if not q: return
     st.session_state["temp_question"] = q
-    
-    # Gán giá trị rỗng cho input area (Đây là dòng sửa lỗi chính!)
     st.session_state.user_input_area = ""
-    
-    # Đánh dấu trạng thái là đang xử lý ảnh
     st.session_state["pending_action"] = "image"
 
 # --------------------------
-# LOGIN (Giữ nguyên)
+# LOGIN (ĐÃ SỬA LỖI HÌNH ẢNH)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
-    # ... (giữ nguyên logic login) ...
     st.markdown("""
         <div style="text-align:center; background: linear-gradient(to right, #74ebd5, #ACB6E5); padding:30px; border-radius:12px; margin-bottom:20px;">
-            <img src="https://i.imgur.com/4AiXzf8.png" width="120" style="border-radius:50%;"/>
-            <h1 style='color:#2c3e50; margin:10px;'>👨‍🏫 GIA SƯ ẢO CỦA BẠN</h1>
+            <div style="font-size: 80px; margin-bottom: 10px;">👨‍🏫</div> 
+            <h1 style='color:#2c3e50; margin:10px;'>GIA SƯ ẢO CỦA BẠN</h1>
             <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
     """, unsafe_allow_html=True)
     col1, col2 = st.columns([1,1])
-    with col1: name_input = st.text_input("Họ và tên")
-    with col2: class_input = st.text_input("Lớp")
+    with col1: name_input = st.text_input("Họ và tên", value=st.session_state.user_name)
+    with col2: class_input = st.text_input("Lớp", value=st.session_state.user_class)
     if st.button("Đăng nhập", use_container_width=True):
         if name_input.strip() and class_input.strip():
             st.session_state.user_name = name_input.strip()
@@ -159,7 +137,21 @@ if not st.session_state.user_name or not st.session_state.user_class:
     st.stop()
 
 # --------------------------
-# MAIN UI (Vị trí các phần tử)
+# SIDEBAR (Giữ nguyên)
+# --------------------------
+with st.sidebar:
+    st.markdown(f"### Xin chào, {st.session_state.user_name} - Lớp {st.session_state.user_class}")
+    chosen_label = st.selectbox("Chọn model Gemini", list(MODEL_OPTIONS.keys()))
+    st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
+    style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
+    tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
+    # Lưu tts_enabled vào state để dùng trong hàm xử lý pending action
+    st.session_state["tts_enabled"] = tts_enabled 
+    # Lưu style vào state
+    st.session_state["style"] = style 
+
+# --------------------------
+# MAIN UI
 # --------------------------
 with st.container():
     col_left, col_right = st.columns([3, 1]) 
@@ -208,13 +200,13 @@ if st.session_state.get("pending_action"):
                 st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi: {err}","time":datetime.utcnow().isoformat()})
             else:
                 st.session_state.chat_history.append({"role":"assistant","text":answer,"time":datetime.utcnow().isoformat()})
-                if st.session_state.get("tts_enabled"): speak_text(answer) # Cần đảm bảo tts_enabled có trong state nếu dùng
+                if st.session_state.get("tts_enabled"): speak_text(answer) 
     
     elif st.session_state["pending_action"] == "image":
         st.session_state.chat_history.append({"role":"user","text":f"[Yêu cầu tạo ảnh]: {q}","time":datetime.utcnow().isoformat()})
         with st.spinner("🎨 Đang tạo ảnh minh họa..."):
-            style = st.session_state.get("style", "Gia sư trẻ trung") # Lấy style từ state
-            img_b64, img_err = call_gemini_image(st.session_state.chosen_model, f"{q} - style: {style}")
+            style_key = st.session_state.get("style", "Gia sư trẻ trung") 
+            img_b64, img_err = call_gemini_image(st.session_state.chosen_model, f"{q} - style: {style_key}")
             if img_err:
                 st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi tạo ảnh: {img_err}"})
             else:
@@ -222,10 +214,10 @@ if st.session_state.get("pending_action"):
                     "role":"assistant","text":"**[Ảnh minh họa đã tạo]**","image_b64":img_b64,
                     "time":datetime.utcnow().isoformat()
                 })
-                store_image_entry(q, img_b64, style)
+                store_image_entry(q, img_b64, style_key)
 
     # Dọn dẹp trạng thái chờ và chạy lại
-    st.session_state["pending_action"] = None
+    st.session_state["pending_action"] = ""
     st.session_state["temp_question"] = ""
     st.rerun()
 
@@ -235,9 +227,7 @@ user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_in
 col1_btn, col2_btn = st.columns([1,1])
 
 with col1_btn:
-    # Gán hàm callback để xử lý việc xóa input trước khi chạy lại
     st.button("Gửi câu hỏi", use_container_width=True, type="primary", on_click=handle_send_text)
 
 with col2_btn:
-    # Gán hàm callback để xử lý việc xóa input trước khi chạy lại
     st.button("Tạo ảnh minh họa", use_container_width=True, on_click=handle_send_image)
