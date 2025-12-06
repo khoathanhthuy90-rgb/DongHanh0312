@@ -63,7 +63,7 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # --------------------------
 def call_gemini_text(model, user_prompt):
     """Gọi Gemini v1beta chuẩn với prompt.messages"""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
     payload = {
         "prompt": {
             "messages": [
@@ -84,6 +84,7 @@ def call_gemini_text(model, user_prompt):
         return None, f"Lỗi API: {e}"
 
 def call_gemini_image(model, prompt):
+    """Tạo ảnh qua generateContent"""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {
         "prompt": {
@@ -99,9 +100,11 @@ def call_gemini_image(model, prompt):
         res.raise_for_status()
         data = res.json()
         for p in data["candidates"][0]["content"]:
-            if "media" in p: return p["media"]["data"], None
+            if "media" in p:
+                return p["media"]["data"], None
         return None, "Không tìm thấy media"
-    except Exception as e: return None, str(e)
+    except Exception as e:
+        return None, f"Lỗi API ảnh: {e}"
 
 def store_image_entry(question_text, img_b64, style_key):
     img_id = str(uuid.uuid4())
