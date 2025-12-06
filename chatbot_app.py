@@ -1,4 +1,4 @@
-# app_gia_su_ao_v2.py
+# app_gia_su_ao_v3.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -62,22 +62,18 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # HELPERS
 # --------------------------
 def call_gemini_text(model, user_prompt):
+    """ Gọi Gemini v1beta chuẩn mới (không lỗi 400) """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
     payload = {
-        "prompt": {
-            "messages": [
-                {"author":"system","content":[{"type":"text","text": SYSTEM_INSTRUCTION}]},
-                {"author":"user","content":[{"type":"text","text": user_prompt}]}
-            ]
-        },
-        "temperature": 0.2,
-        "candidate_count": 1
+        "response_format": "text",
+        "instructions": SYSTEM_INSTRUCTION,
+        "input": user_prompt
     }
     try:
         res = requests.post(url, json=payload, timeout=45)
         res.raise_for_status()
         data = res.json()
-        text = data["candidates"][0]["content"][0].get("text","")
+        text = data.get("candidates", [{}])[0].get("content", [{}])[0].get("text", "")
         return text, None
     except Exception as e:
         return None, f"Lỗi API: {e}"
@@ -86,9 +82,7 @@ def call_gemini_image(model, prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {
         "prompt": {
-            "messages": [
-                {"author":"user","content":[{"type":"text","text": prompt}]}
-            ]
+            "messages":[{"author":"user","content":[{"type":"text","text":prompt}]}]
         },
         "temperature":0.2,
         "candidate_count":1
@@ -97,7 +91,7 @@ def call_gemini_image(model, prompt):
         res = requests.post(url, json=payload, timeout=90)
         res.raise_for_status()
         data = res.json()
-        for p in data["candidates"][0]["content"]:
+        for p in data.get("candidates", [{}])[0].get("content", []):
             if "media" in p:
                 return p["media"]["data"], None
         return None, "Không tìm thấy media"
