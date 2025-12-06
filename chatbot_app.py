@@ -1,4 +1,4 @@
-# app_gia_su_ao_v10_final.py (Code giữ nguyên tính năng và đã tối ưu)
+# app_gia_su_ao_final_complete.py 
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -6,9 +6,10 @@ from datetime import datetime
 # --------------------------
 # CONFIG
 # --------------------------
+# Lưu ý: Cần đảm bảo có GEMINI_API_KEY trong file .streamlit/secrets.toml
 API_KEY = st.secrets.get("GEMINI_API_KEY", "").strip()
 if not API_KEY:
-    st.error("⚠️ Thiếu GEMINI_API_KEY trong .streamlit/secrets.toml")
+    st.error("⚠️ Thiếu GEMINI_API_KEY trong .streamlit/secrets.toml. Vui lòng kiểm tra lại cấu hình.")
     st.stop()
 
 MODEL_OPTIONS = {
@@ -36,16 +37,20 @@ for key in ["chat_history", "image_history", "chosen_model"]:
         
 for key in ["user_name", "user_class", "user_input_area", "pending_action", "temp_question", "tts_enabled", "style"]:
     if key not in st.session_state:
-        st.session_state[key] = ""
+        # Khởi tạo giá trị mặc định cho các khóa
+        st.session_state[key] = "" if key not in ["tts_enabled"] else False
 
 
 # --------------------------
 # HELPERS & CALLBACKS
 # --------------------------
 def call_gemini_text(model, user_prompt):
+    """Gọi API Gemini Text với context cá nhân hóa và payload tối thiểu."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     user_name = st.session_state.get("user_name", "học sinh")
     user_class = st.session_state.get("user_class", "Chưa rõ")
+    
+    # Thêm context cá nhân hóa
     personal_context = (
         f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
         "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
@@ -66,6 +71,7 @@ def call_gemini_text(model, user_prompt):
         return None, f"Lỗi API văn bản: {error_detail}"
 
 def call_gemini_image(model, prompt):
+    """Gọi API Gemini Image với payload tối thiểu."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {
         "contents":[{"role":"user","parts":[{"text": prompt}]}]
@@ -84,6 +90,7 @@ def call_gemini_image(model, prompt):
         return None, f"Lỗi API ảnh: {error_detail}"
 
 def store_image_entry(question_text, img_b64, style_key):
+    """Lưu trữ lịch sử ảnh đã tạo."""
     img_id = str(uuid.uuid4())
     st.session_state.image_history.append({
         "id": img_id, "question": question_text,
@@ -93,10 +100,12 @@ def store_image_entry(question_text, img_b64, style_key):
     return img_id
 
 def speak_text(text):
+    """Tính năng Text-to-Speech sử dụng gTTS."""
     try:
         from gtts import gTTS
         fp = io.BytesIO()
-        clean_text = text.replace("**","").replace("$","").replace("\\","")
+        # Loại bỏ các ký tự LaTeX và Markdown để đọc mượt hơn
+        clean_text = text.replace("**","").replace("$","").replace("\\","").replace("{","").replace("}","")
         tts = gTTS(text=clean_text, lang="vi")
         tts.write_to_fp(fp)
         fp.seek(0)
@@ -105,29 +114,31 @@ def speak_text(text):
          st.warning("Không thể tạo giọng nói.")
 
 def set_pending_action(action_type):
+    """Callback để xử lý sự kiện nút bấm và xóa input."""
     q = st.session_state.user_input_area.strip()
     if not q: return
     st.session_state["temp_question"] = q
-    st.session_state.user_input_area = ""
+    # Đây là dòng fix lỗi StreamlitAPIException chính: xóa input trong callback
+    st.session_state.user_input_area = "" 
     st.session_state["pending_action"] = action_type
 
 
 # --------------------------
-# LOGIN
+# LOGIN SCREEN
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
         <div style="text-align:center; 
-                    /* Màu nền đã chỉnh */
+                    /* Màu nền tươi sáng */
                     background: linear-gradient(to right, #a1c4fd, #c2e9fb); 
                     padding:30px; 
                     border-radius:12px; 
                     margin-bottom:20px;">
             <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
             
-            <h2 style='color:#2c3e50; margin:10px; font-size: 28px;'>GIA SƯ ẢO CỦA BẠN</h2>
+            <h2 style='color:#2c3e50; margin:10px; font-size: 24px;'>GIA SƯ ẢO CỦA BẠN</h2>
             
-            <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
+            <h4 style='color:#007bff; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
     """, unsafe_allow_html=True)
     col1, col2 = st.columns([1,1])
@@ -143,35 +154,38 @@ if not st.session_state.user_name or not st.session_state.user_class:
     st.stop()
 
 # --------------------------
-# SIDEBAR
+# SIDEBAR CONTROLS
 # --------------------------
 with st.sidebar:
-    st.markdown(f"### Xin chào, {st.session_state.user_name} - Lớp {st.session_state.user_class}")
+    st.markdown(f"### Xin chào, **{st.session_state.user_name}** - Lớp **{st.session_state.user_class}**")
     chosen_label = st.selectbox("Chọn model Gemini", list(MODEL_OPTIONS.keys()))
     st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
-    tts_enabled = st.checkbox("Bật Text-to-Speech", value=st.session_state.get("tts_enabled", False))
+    tts_enabled = st.checkbox("Bật Text-to-Speech (Đọc lời giải)", value=st.session_state.get("tts_enabled", False))
     st.session_state["tts_enabled"] = tts_enabled 
     st.session_state["style"] = style 
 
 # --------------------------
-# MAIN UI
+# MAIN UI & CHAT DISPLAY
 # --------------------------
 with st.container():
     col_left, col_right = st.columns([3, 1]) 
     
     with col_right:
         st.subheader("📂 Nhật ký ảnh")
+        # Hiển thị 6 ảnh gần nhất
         for entry in reversed(st.session_state.image_history[-6:]):
             st.image(base64.b64decode(entry["b64"]), width=100)
             st.caption(f"📝 {entry['question'][:30]}...")
 
     with col_left:
+        # CSS cho khung chat (max-height: 600px cho laptop)
         st.markdown("<style> .chat-box {max-height:600px; overflow-y:auto; padding:10px;} </style>", unsafe_allow_html=True) 
         chat_container = st.container()
 
         def show_chat():
             with chat_container:
+                # Lặp qua lịch sử chat để hiển thị, tin mới nhất ở dưới cùng
                 for msg in st.session_state.chat_history: 
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
@@ -192,7 +206,9 @@ with st.container():
         
         show_chat()
 
-# XỬ LÝ HÀNH ĐỘNG ĐANG CHỜ (API LOGIC)
+# --------------------------
+# API PROCESSING LOGIC
+# --------------------------
 if st.session_state.get("pending_action"):
     q = st.session_state.get("temp_question")
     
@@ -220,18 +236,22 @@ if st.session_state.get("pending_action"):
                 })
                 store_image_entry(q, img_b64, style_key)
 
-    # Dọn dẹp trạng thái chờ và chạy lại
+    # Dọn dẹp trạng thái chờ và chạy lại để cập nhật UI
     st.session_state["pending_action"] = ""
     st.session_state["temp_question"] = ""
     st.rerun()
 
 
-# Hộp nhập câu hỏi dưới cùng
+# --------------------------
+# USER INPUT AREA (Luôn ở dưới cùng)
+# --------------------------
 user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_input_area") 
 col1_btn, col2_btn = st.columns([1,1])
 
 with col1_btn:
+    # Nút gửi văn bản, sử dụng callback set_pending_action
     st.button("Gửi câu hỏi", use_container_width=True, type="primary", on_click=set_pending_action, args=("text",))
 
 with col2_btn:
+    # Nút tạo ảnh, sử dụng callback set_pending_action
     st.button("Tạo ảnh minh họa", use_container_width=True, on_click=set_pending_action, args=("image",))
