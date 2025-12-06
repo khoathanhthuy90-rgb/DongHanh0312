@@ -1,4 +1,4 @@
-# app_gia_su_ao_v_final_modern_v4.py
+# app_gia_su_ao_v10_final.py (Code giữ nguyên tính năng và đã tối ưu)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -33,62 +33,25 @@ st.set_page_config(page_title="Gia Sư Ảo", layout="wide", page_icon="🤖")
 for key in ["chat_history", "image_history", "chosen_model"]:
     if key not in st.session_state:
         st.session_state[key] = []
-
-for key in ["user_name", "user_class", "user_input_area"]:
+        
+for key in ["user_name", "user_class", "user_input_area", "pending_action", "temp_question", "tts_enabled", "style"]:
     if key not in st.session_state:
         st.session_state[key] = ""
 
-# --------------------------
-# LOGIN
-# --------------------------
-if not st.session_state.user_name or not st.session_state.user_class:
-    st.markdown("""
-    <div style="
-        text-align:center; 
-        background: linear-gradient(135deg, #74ebd5 0%, #ACB6E5 100%);
-        padding: 40px 20px; 
-        border-radius: 20px; 
-        margin-bottom: 30px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    ">
-        <h2 style="
-            color:#2c3e50; 
-            font-size:32px; 
-            font-weight:700; 
-            margin:0 0 10px 0;
-        ">
-            👨‍🏫 GIA SƯ ẢO CỦA BẠN
-        </h2>
-        <h4 style="
-            color:#7f8c8d; 
-            font-size:20px; 
-            font-weight:400; 
-            margin:0;
-        ">
-            ĐỀ TÀI NGHIÊN CỨU KHOA HỌC
-        </h4>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([1,1])
-    with col1: name_input = st.text_input("Họ và tên")
-    with col2: class_input = st.text_input("Lớp")
-    
-    if st.button("Đăng nhập", use_container_width=True):
-        if name_input.strip() and class_input.strip():
-            st.session_state.user_name = name_input.strip()
-            st.session_state.user_class = class_input.strip()
-            st.rerun()  
-        else:
-            st.warning("Vui lòng nhập đủ Họ tên và Lớp.")
-    st.stop()
 
 # --------------------------
-# HELPERS
+# HELPERS & CALLBACKS
 # --------------------------
 def call_gemini_text(model, user_prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-    full_prompt = f"{SYSTEM_INSTRUCTION}\n\n[Đề bài]: {user_prompt}"
+    user_name = st.session_state.get("user_name", "học sinh")
+    user_class = st.session_state.get("user_class", "Chưa rõ")
+    personal_context = (
+        f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
+        "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
+    )
+    full_prompt = f"{SYSTEM_INSTRUCTION} {personal_context}\n\n[Đề bài]: {user_prompt}"
+    
     payload = {
         "contents": [{"role":"user", "parts":[{"text": full_prompt}]}]
     }
@@ -104,13 +67,15 @@ def call_gemini_text(model, user_prompt):
 
 def call_gemini_image(model, prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-    payload = {"contents":[{"role":"user","parts":[{"text": prompt}]}]}
+    payload = {
+        "contents":[{"role":"user","parts":[{"text": prompt}]}]
+    }
     try:
         res = requests.post(url, json=payload, timeout=90)
         res.raise_for_status()
         data = res.json()
         for candidate in data.get("candidates", []):
-            for part in candidate.get("content", {}).get("parts", []):
+            for part in candidate.get("content", {}).get("parts", []): 
                 if "inlineData" in part and part["inlineData"]["mimeType"].startswith("image/"):
                     return part["inlineData"]["data"], None
         return None, "Không tìm thấy media (ảnh) trong phản hồi."
@@ -137,7 +102,45 @@ def speak_text(text):
         fp.seek(0)
         st.audio(fp.read(), format="audio/mp3")
     except Exception:
-        st.warning("Không thể tạo giọng nói.")
+         st.warning("Không thể tạo giọng nói.")
+
+def set_pending_action(action_type):
+    q = st.session_state.user_input_area.strip()
+    if not q: return
+    st.session_state["temp_question"] = q
+    st.session_state.user_input_area = ""
+    st.session_state["pending_action"] = action_type
+
+
+# --------------------------
+# LOGIN
+# --------------------------
+if not st.session_state.user_name or not st.session_state.user_class:
+    st.markdown("""
+        <div style="text-align:center; 
+                    /* Màu nền đã chỉnh */
+                    background: linear-gradient(to right, #a1c4fd, #c2e9fb); 
+                    padding:30px; 
+                    border-radius:12px; 
+                    margin-bottom:20px;">
+            <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
+            
+            <h2 style='color:#2c3e50; margin:10px; font-size: 28px;'>GIA SƯ ẢO CỦA BẠN</h2>
+            
+            <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
+        </div>
+    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([1,1])
+    with col1: name_input = st.text_input("Họ và tên", value=st.session_state.user_name)
+    with col2: class_input = st.text_input("Lớp", value=st.session_state.user_class)
+    if st.button("Đăng nhập", use_container_width=True):
+        if name_input.strip() and class_input.strip():
+            st.session_state.user_name = name_input.strip()
+            st.session_state.user_class = class_input.strip()
+            st.rerun()  
+        else:
+            st.warning("Vui lòng nhập đủ Họ tên và Lớp.")
+    st.stop()
 
 # --------------------------
 # SIDEBAR
@@ -147,14 +150,16 @@ with st.sidebar:
     chosen_label = st.selectbox("Chọn model Gemini", list(MODEL_OPTIONS.keys()))
     st.session_state.chosen_model = MODEL_OPTIONS[chosen_label]
     style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()), index=0)
-    tts_enabled = st.checkbox("Bật Text-to-Speech", value=False)
+    tts_enabled = st.checkbox("Bật Text-to-Speech", value=st.session_state.get("tts_enabled", False))
+    st.session_state["tts_enabled"] = tts_enabled 
+    st.session_state["style"] = style 
 
 # --------------------------
 # MAIN UI
 # --------------------------
 with st.container():
-    col_left, col_right = st.columns([3,1])
-
+    col_left, col_right = st.columns([3, 1]) 
+    
     with col_right:
         st.subheader("📂 Nhật ký ảnh")
         for entry in reversed(st.session_state.image_history[-6:]):
@@ -162,58 +167,71 @@ with st.container():
             st.caption(f"📝 {entry['question'][:30]}...")
 
     with col_left:
-        st.markdown("<style> .chat-box {max-height:500px; overflow-y:auto; padding:10px;} </style>", unsafe_allow_html=True)
+        st.markdown("<style> .chat-box {max-height:600px; overflow-y:auto; padding:10px;} </style>", unsafe_allow_html=True) 
         chat_container = st.container()
 
         def show_chat():
             with chat_container:
-                for msg in reversed(st.session_state.chat_history):
+                for msg in st.session_state.chat_history: 
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
+                    
                     st.markdown(f"""
                     <div style='
-                        background:{color};
-                        padding:12px;
-                        border-radius:10px;
-                        margin-bottom:8px;
-                        box-shadow:0 2px 4px rgba(0,0,0,0.05);
+                        background:{color}; 
+                        padding:12px; 
+                        border-radius:10px; 
+                        margin-bottom:8px; 
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                     '>
                         {msg['text']}
                     </div>""", unsafe_allow_html=True)
+                    
                     if msg.get("image_b64"):
                         st.image(base64.b64decode(msg["image_b64"]), use_column_width=True)
+        
         show_chat()
 
+# XỬ LÝ HÀNH ĐỘNG ĐANG CHỜ (API LOGIC)
+if st.session_state.get("pending_action"):
+    q = st.session_state.get("temp_question")
+    
+    if st.session_state["pending_action"] == "text":
+        st.session_state.chat_history.append({"role":"user","text":q,"time":datetime.utcnow().isoformat()})
+        with st.spinner("⏳ Đang tạo lời giải..."):
+            answer, err = call_gemini_text(st.session_state.chosen_model, q)
+            if err:
+                st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi: {err}","time":datetime.utcnow().isoformat()})
+            else:
+                st.session_state.chat_history.append({"role":"assistant","text":answer,"time":datetime.utcnow().isoformat()})
+                if st.session_state.get("tts_enabled"): speak_text(answer) 
+    
+    elif st.session_state["pending_action"] == "image":
+        st.session_state.chat_history.append({"role":"user","text":f"[Yêu cầu tạo ảnh]: {q}","time":datetime.utcnow().isoformat()})
+        with st.spinner("🎨 Đang tạo ảnh minh họa..."):
+            style_key = st.session_state.get("style", "Gia sư trẻ trung") 
+            img_b64, img_err = call_gemini_image(st.session_state.chosen_model, f"{q} - style: {style_key}")
+            if img_err:
+                st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi tạo ảnh: {img_err}"})
+            else:
+                st.session_state.chat_history.append({
+                    "role":"assistant","text":"**[Ảnh minh họa đã tạo]**","image_b64":img_b64,
+                    "time":datetime.utcnow().isoformat()
+                })
+                store_image_entry(q, img_b64, style_key)
+
+    # Dọn dẹp trạng thái chờ và chạy lại
+    st.session_state["pending_action"] = ""
+    st.session_state["temp_question"] = ""
+    st.rerun()
+
+
 # Hộp nhập câu hỏi dưới cùng
-user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_input_area")
+user_q = st.text_area("Nhập câu hỏi của bạn:", height=120, key="user_input_area") 
 col1_btn, col2_btn = st.columns([1,1])
 
 with col1_btn:
-    if st.button("Gửi câu hỏi", use_container_width=True):
-        q = st.session_state.user_input_area.strip()
-        if q:
-            st.session_state.user_input_area = ""
-            st.session_state.chat_history.append({"role":"user","text":q,"time":datetime.utcnow().isoformat()})
-            with st.spinner("⏳ Đang tạo lời giải..."):
-                answer, err = call_gemini_text(st.session_state.chosen_model, q)
-                if err:
-                    st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi: {err}","time":datetime.utcnow().isoformat()})
-                else:
-                    st.session_state.chat_history.append({"role":"assistant","text":answer,"time":datetime.utcnow().isoformat()})
-                    if tts_enabled: speak_text(answer)
-            st.rerun()
+    st.button("Gửi câu hỏi", use_container_width=True, type="primary", on_click=set_pending_action, args=("text",))
 
 with col2_btn:
-    if st.button("Tạo ảnh minh họa", use_container_width=True):
-        q = st.session_state.user_input_area.strip()
-        if q:
-            st.session_state.user_input_area = ""
-            st.session_state.chat_history.append({"role":"user","text":f"[Yêu cầu tạo ảnh]: {q}","time":datetime.utcnow().isoformat()})
-            with st.spinner("🎨 Đang tạo ảnh minh họa..."):
-                img_b64, img_err = call_gemini_image(st.session_state.chosen_model, f"{q} - style: {style}")
-                if img_err:
-                    st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi tạo ảnh: {img_err}"})
-                else:
-                    st.session_state.chat_history.append({"role":"assistant","text":"**[Ảnh minh họa đã tạo]**","image_b64":img_b64,"time":datetime.utcnow().isoformat()})
-                    store_image_entry(q, img_b64, style)
-            st.rerun()
+    st.button("Tạo ảnh minh họa", use_container_width=True, on_click=set_pending_action, args=("image",))
