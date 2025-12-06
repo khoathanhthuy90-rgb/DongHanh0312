@@ -1,4 +1,4 @@
-# app_gia_su_ao_v9_final.py (Cá nhân hóa và Icon AI)
+# app_gia_su_ao_v10_final.py (Code giữ nguyên tính năng và đã tối ưu)
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -16,7 +16,6 @@ MODEL_OPTIONS = {
     "Gemini 2.5 Pro": "gemini-2.5-pro",
 }
 
-# HƯỚNG DẪN HỆ THỐNG GỐC
 SYSTEM_INSTRUCTION = (
     "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. "
     "Trình bày rõ ràng, dùng LaTeX khi cần."
@@ -44,21 +43,13 @@ for key in ["user_name", "user_class", "user_input_area", "pending_action", "tem
 # HELPERS & CALLBACKS
 # --------------------------
 def call_gemini_text(model, user_prompt):
-    """
-    Sửa đổi: Thêm context cá nhân hóa vào prompt.
-    """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-    
-    # Lấy tên học sinh đã đăng nhập
     user_name = st.session_state.get("user_name", "học sinh")
     user_class = st.session_state.get("user_class", "Chưa rõ")
-    
-    # Thêm context cá nhân hóa vào đầu prompt
     personal_context = (
         f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
         "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
     )
-    
     full_prompt = f"{SYSTEM_INSTRUCTION} {personal_context}\n\n[Đề bài]: {user_prompt}"
     
     payload = {
@@ -122,13 +113,20 @@ def set_pending_action(action_type):
 
 
 # --------------------------
-# LOGIN (ĐÃ SỬA LỖI HÌNH ẢNH)
+# LOGIN
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
-        <div style="text-align:center; background: linear-gradient(to right, #74ebd5, #ACB6E5); padding:30px; border-radius:12px; margin-bottom:20px;">
+        <div style="text-align:center; 
+                    /* Màu nền đã chỉnh */
+                    background: linear-gradient(to right, #a1c4fd, #c2e9fb); 
+                    padding:30px; 
+                    border-radius:12px; 
+                    margin-bottom:20px;">
             <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
-            <h1 style='color:#2c3e50; margin:10px;'>GIA SƯ ẢO CỦA BẠN</h1>
+            
+            <h2 style='color:#2c3e50; margin:10px; font-size: 28px;'>GIA SƯ ẢO CỦA BẠN</h2>
+            
             <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
     """, unsafe_allow_html=True)
@@ -169,12 +167,11 @@ with st.container():
             st.caption(f"📝 {entry['question'][:30]}...")
 
     with col_left:
-        st.markdown("<style> .chat-box {max-height:500px; overflow-y:auto; padding:10px;} </style>", unsafe_allow_html=True)
+        st.markdown("<style> .chat-box {max-height:600px; overflow-y:auto; padding:10px;} </style>", unsafe_allow_html=True) 
         chat_container = st.container()
 
         def show_chat():
             with chat_container:
-                # Hiển thị tin nhắn mới nhất ở dưới cùng (không dùng reversed)
                 for msg in st.session_state.chat_history: 
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
