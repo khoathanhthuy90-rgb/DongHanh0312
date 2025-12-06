@@ -1,4 +1,4 @@
-# app_gia_su_ao_v3.py
+# app_gia_su_ao_v4.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -19,7 +19,7 @@ MODEL_OPTIONS = {
 
 SYSTEM_INSTRUCTION = (
     "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. "
-    "Trình bày rõ ràng, dùng LaTeX khi cần. Nếu có ảnh, sử dụng ảnh để giải thích."
+    "Trình bày rõ ràng, dùng LaTeX khi cần."
 )
 
 STYLE_PROMPT_MAP = {
@@ -62,18 +62,19 @@ if not st.session_state.user_name or not st.session_state.user_class:
 # HELPERS
 # --------------------------
 def call_gemini_text(model, user_prompt):
-    """ Gọi Gemini v1beta chuẩn mới (không lỗi 400) """
+    """ Gọi Gemini v1beta chuẩn mới """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateText?key={API_KEY}"
     payload = {
-        "response_format": "text",
-        "instructions": SYSTEM_INSTRUCTION,
-        "input": user_prompt
+        "text": user_prompt,
+        "temperature": 0.2,
+        "candidate_count": 1,
+        "max_output_tokens": 512
     }
     try:
         res = requests.post(url, json=payload, timeout=45)
         res.raise_for_status()
         data = res.json()
-        text = data.get("candidates", [{}])[0].get("content", [{}])[0].get("text", "")
+        text = data["candidates"][0]["content"][0]["text"]
         return text, None
     except Exception as e:
         return None, f"Lỗi API: {e}"
@@ -81,9 +82,7 @@ def call_gemini_text(model, user_prompt):
 def call_gemini_image(model, prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     payload = {
-        "prompt": {
-            "messages":[{"author":"user","content":[{"type":"text","text":prompt}]}]
-        },
+        "prompt": {"messages":[{"author":"user","content":[{"type":"text","text":prompt}]}]},
         "temperature":0.2,
         "candidate_count":1
     }
