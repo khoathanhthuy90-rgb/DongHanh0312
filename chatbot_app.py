@@ -1,4 +1,4 @@
-# app_gia_su_ao_stable_restore_fixed_image.py
+# app_gia_su_ao_final_stable.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -49,7 +49,7 @@ def call_gemini_text(model, user_prompt):
     user_name = st.session_state.get("user_name", "học sinh")
     user_class = st.session_state.get("user_class", "Chưa rõ")
     
-    # Cá nhân hóa
+    # Thêm context cá nhân hóa
     personal_context = (
         f"Bạn đang nói chuyện với học sinh tên là {user_name} (Lớp {user_class}). "
         "Hãy luôn thân thiện, vui vẻ, và cố gắng nhắc lại tên học sinh một cách tự nhiên trong lời giải của mình."
@@ -122,19 +122,19 @@ def set_pending_action(action_type):
 
 
 # --------------------------
-# LOGIN (UI ỔN ĐỊNH)
+# LOGIN (KHẮC PHỤC LỖI HIỂN THỊ CHỮ)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
         <div style="text-align:center; 
-                    /* Màu nền tươi sáng */
+                    /* Giữ nền tươi sáng cho khối login tổng thể */
                     background: linear-gradient(to right, #a1c4fd, #c2e9fb); 
                     padding:30px; 
                     border-radius:12px; 
                     margin-bottom:20px;">
             <div style="font-size: 80px; margin-bottom: 10px;">🤖</div> 
             
-            <h2 style='color:#2c3e50; margin:10px; font-size: 28px;'>GIA SƯ ẢO CỦA BẠN</h2>
+            <h2 style='color:#2c3e50; margin:10px; font-size: 28px; background: white; padding: 5px; border-radius: 5px;'>GIA SƯ ẢO CỦA BẠN</h2>
             
             <h4 style='color:#7f8c8d; margin:5px;'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h4>
         </div>
@@ -187,6 +187,7 @@ with st.container():
 
         def show_chat():
             with chat_container:
+                # Tin nhắn mới nhất ở dưới cùng
                 for msg in st.session_state.chat_history: 
                     role = msg["role"]
                     color = "#e6f3ff" if role=="user" else "#f0e6ff"
@@ -212,7 +213,7 @@ with st.container():
         show_chat()
 
 # --------------------------
-# API PROCESSING LOGIC (ĐÃ SỬA LỖI KIỂM TRA DỮ LIỆU ẢNH)
+# API PROCESSING LOGIC
 # --------------------------
 if st.session_state.get("pending_action"):
     q = st.session_state.get("temp_question")
@@ -233,7 +234,7 @@ if st.session_state.get("pending_action"):
             style_key = st.session_state.get("style", "Gia sư trẻ trung") 
             img_b64, img_err = call_gemini_image(st.session_state.chosen_model, f"{q} - style: {style_key}")
             
-            # --- FIX: Kiểm tra rõ ràng nếu có lỗi API hoặc không có dữ liệu ảnh trả về ---
+            # Kiểm tra rõ ràng nếu có lỗi API hoặc không có dữ liệu ảnh trả về
             if img_err:
                 st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi tạo ảnh từ API: {img_err}","time":datetime.utcnow().isoformat()})
             elif not img_b64:
