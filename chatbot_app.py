@@ -1,4 +1,4 @@
-# app_gia_su_ao_final_stable.py
+# app_gia_su_ao_final_stable_FINAL.py
 import streamlit as st
 import requests, base64, uuid, io
 from datetime import datetime
@@ -25,6 +25,7 @@ STYLE_PROMPT_MAP = {
     "Gia sư trẻ trung": "young friendly tutor, smiling, colorful, modern, cartoon-realistic style"
 }
 
+# Khôi phục mặc định và không ẩn menu_items để giữ lại dấu (⋮)
 st.set_page_config(page_title="Gia Sư Ảo", layout="wide", page_icon="🤖")
 
 # --------------------------
@@ -41,6 +42,7 @@ for key in ["user_name", "user_class", "user_input_area", "pending_action", "tem
 # --------------------------
 # HELPERS
 # --------------------------
+# Loại bỏ @st.cache_data khỏi các hàm API call để đảm bảo luồng reruns hoạt động chính xác
 def call_gemini_text(model, user_prompt):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
     user_name = st.session_state.get("user_name", "học sinh")
@@ -96,6 +98,7 @@ def speak_text(text):
         fp.seek(0)
         st.audio(fp.read(), format="audio/mp3")
     except Exception:
+        # Giữ lại thông báo lỗi nếu gTTS không hoạt động
         st.warning("Không thể tạo giọng nói.")
 
 def set_pending_action(action_type):
@@ -106,20 +109,34 @@ def set_pending_action(action_type):
     st.session_state["pending_action"] = action_type
 
 # --------------------------
-# LOGIN INTERFACE (HIỆU ỨNG)
+# LOGIN INTERFACE (FIX LỖI HIỂN THỊ CHỮ MÀ VẪN GIỮ HIỆU ỨNG)
 # --------------------------
 if not st.session_state.user_name or not st.session_state.user_class:
     st.markdown("""
         <style>
-        .login-title {font-size: 36px; color:#2c3e50; background:white; display:inline-block; padding:8px 15px; border-radius:8px; margin:10px; text-shadow:2px 2px 5px rgba(0,0,0,0.3); animation: fadeIn 1.5s ease-in-out;}
+        /* Đảm bảo nền trắng rõ ràng cho tiêu đề chính */
+        .login-title {
+            font-size: 36px; 
+            color:#2c3e50; 
+            background:white; 
+            display:inline-block; 
+            padding:8px 15px; 
+            border-radius:8px; 
+            margin:10px; 
+            /* Giảm độ bóng để không che chữ quá nhiều */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
+            animation: fadeIn 1.5s ease-in-out;
+        }
         .login-subtitle {font-size: 24px; color:#34495e; margin:10px; animation: fadeIn 2s ease-in-out;}
         .login-desc {font-size: 18px; color:#2c3e50; margin-top:5px; animation: fadeIn 2.5s ease-in-out;}
         @keyframes fadeIn {from {opacity:0; transform:translateY(-20px);} to {opacity:1; transform:translateY(0);}}
         </style>
         <div style="text-align:center; background: linear-gradient(to right,#a1c4fd,#c2e9fb); padding:40px; border-radius:12px; margin-bottom:20px;">
             <div style="font-size:100px; margin-bottom:15px;">🤖</div>
+            
             <h1 class='login-title'>GIA SƯ ẢO CỦA BẠN</h1>
             <h3 class='login-subtitle'>ĐỀ TÀI NGHIÊN CỨU KHOA HỌC</h3>
+            
             <p class='login-desc'>Nhập Họ và Tên cùng Lớp để bắt đầu trải nghiệm</p>
         </div>
     """, unsafe_allow_html=True)
