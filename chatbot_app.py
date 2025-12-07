@@ -1,326 +1,86 @@
-# app_gia_su_ao_final_optimal.py
 import streamlit as st
-import requests, base64, uuid, io, time
-from datetime import datetime
+import requests
+import json
 
-# ======================
-# CONFIG
-# ======================
-API_KEY = st.secrets.get("GEMINI_API_KEY", "").strip()
-if not API_KEY:
-    st.error("⚠️ Thiếu GEMINI_API_KEY trong .streamlit/secrets.toml.")
+# ============================================
+# PHẦN LẤY API KEYS
+# ============================================
+GEMINI_KEYS = st.secrets.get("GEMINI_KEYS", [])
+if not GEMINI_KEYS:
+    st.error("⚠️ Bạn chưa cấu hình GEMINI_KEYS trong secrets.toml")
     st.stop()
 
-MODEL_OPTIONS = {
-    "Flash 8B (ổn định nhất)": "gemini-1.5-flash-8b",
-    "Flash Lite (siêu nhẹ)": "gemini-2.0-flash-lite",
-}
+MODEL_MAIN = st.secrets.get("MODEL", "gemini-2.5-flash")
+MODEL_FALLBACK = st.secrets.get("FALLBACK_MODEL", "gemini-1.5-flash")
 
-# Fallback thứ tự A
-FALLBACK_ORDER = [
-    "gemini-1.5-flash-8b",
-    "gemini-2.0-flash-lite",
-]
+# ============================================
+# HÀM GỌI API CÓ TỰ ĐỘNG XOAY API KEY
+# ============================================
+def call_gemini_api(model, payload):
+    last_error = None
 
-SYSTEM_INSTRUCTION = (
-    "Bạn là gia sư ảo thân thiện, giải bài cho học sinh cấp 2–3. "
-    "Trình bày rõ ràng, dùng LaTeX khi cần."
-)
+    for key in GEMINI_KEYS:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+            res = requests.post(url, json=payload, timeout=60)
 
-STYLE_PROMPT_MAP = {
-    "Gia sư trẻ trung": "young friendly tutor, smiling, colorful, modern, cartoon-realistic style"
-}
+            # Nếu quá quota → thử key khác
+            if res.status_code == 429:
+                last_error = "429 - Hết quota, chuyển key khác..."
+                continue
 
-st.set_page_config(page_title="Gia Sư Ảo", layout="wide", page_icon="🤖")
+            res.raise_for_status()
+            return res.json()  # thành công
 
-# ======================
-# SESSION STATE
-# ======================
-DEFAULT_KEYS = [
-    "chat_history", "image_history", "chosen_model",
-    "user_name", "user_class", "user_input_area",
-    "pending_action", "temp_question", "tts_enabled", "style"
-]
+        except Exception as e:
+            last_error = str(e)
+            continue
 
-for key in DEFAULT_KEYS:
-    if key not in st.session_state:
-        st.session_state[key] = [] if "history" in key else ""
+    return None, last_error
 
-st.session_state.setdefault("tts_enabled", False)
-CACHE_ANSWER = {}
-LAST_CALL_TIME = 0
-
-
-# ======================
-# HELPERS
-# ======================
-
-def get_cached_answer(prompt):
-    return CACHE_ANSWER.get(prompt.strip().lower())
-
-def save_cache(prompt, answer):
-    CACHE_ANSWER[prompt.strip().lower()] = answer
-
-def can_call_api():
-    """Chặn spam: chỉ cho gọi API mỗi 3 giây."""
-    global LAST_CALL_TIME
-    now = time.time()
-    if now - LAST_CALL_TIME < 3:
-        return False
-    LAST_CALL_TIME = now
-    return True
-
-
-# ======================
-# API — TEXT (có fallback)
-# ======================
-def call_gemini_text(model, user_prompt):
-    user_name = st.session_state.get("user_name", "học sinh")
-    user_class = st.session_state.get("user_class", "Chưa rõ")
-
-    full_prompt = (
-        f"{SYSTEM_INSTRUCTION}\n"
-        f"Bạn đang hỗ trợ học sinh tên {user_name}, lớp {user_class}.\n---\n"
-        f"Câu hỏi: {user_prompt}"
-    )
-
+# ============================================
+# HÀM TỔNG HỢP — TỰ CHUYỂN MODEL NẾU MODEL CHÍNH HẾT QUOTA
+# ============================================
+def generate_text(prompt):
     payload = {
-        "contents": [
-            {"role": "user", "parts": [{"text": full_prompt}]}
+        "contents":[
+            {"role":"user",
+             "parts":[{"text": prompt}]}
         ]
     }
 
-    # Danh sách model thử theo Fallback A
-    models_to_try = [model] + [m for m in FALLBACK_ORDER if m != model]
+    # 1) Thử model chính trước
+    data = call_gemini_api(MODEL_MAIN, payload)
+    if data[0]:
+        return data[0]
+    else:
+        st.warning("⚠️ Model chính hết quota → thử model fallback...")
 
-    last_error = "Không rõ."
+    # 2) Nếu model chính hỏng → chuyển sang fallback model
+    data2 = call_gemini_api(MODEL_FALLBACK, payload)
+    if data2[0]:
+        return data2[0]
 
-    for m in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={API_KEY}"
+    # 3) Cả hai đều lỗi
+    return None
 
-        try:
-            res = requests.post(url, json=payload, timeout=60)
+# ============================================
+# GIAO DIỆN STREAMLIT
+# ============================================
+st.title("🚀 Gemini API — Auto Key Rotation (Fixed Quota Error)")
+prompt = st.text_input("Nhập câu hỏi:")
 
-            # Nếu bị 429 → chuyển model kế tiếp
-            if res.status_code == 429:
-                last_error = "Quota exceeded trên model: " + m
-                continue
+if st.button("Gửi"):
+    if not prompt.strip():
+        st.warning("Bạn chưa nhập nội dung.")
+        st.stop()
 
-            res.raise_for_status()
-            data = res.json()
+    with st.spinner("⏳ Đang xử lý..."):
+        result = generate_text(prompt)
 
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return text, None
-
-        except Exception as e:
-            last_error = str(e)
-
-    return None, f"❌ Fallback thất bại. Lỗi cuối: {last_error}"
-
-
-# ======================
-# API — IMAGE (có fallback)
-# ======================
-def call_gemini_image(model, prompt):
-    payload = {"contents":[{"role":"user","parts":[{"text": prompt}]}]}
-
-    models_to_try = [model] + [m for m in FALLBACK_ORDER if m != model]
-
-    last_error = "Không rõ."
-
-    for m in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={API_KEY}"
-
-        try:
-            res = requests.post(url, json=payload, timeout=90)
-
-            if res.status_code == 429:
-                last_error = "Quota exceeded trên model ảnh: " + m
-                continue
-
-            res.raise_for_status()
-            data = res.json()
-
-            for cand in data.get("candidates", []):
-                for part in cand.get("content", {}).get("parts", []):
-                    if "inlineData" in part:
-                        return part["inlineData"]["data"], None
-
-        except Exception as e:
-            last_error = str(e)
-
-    return None, f"❌ Lỗi hình ảnh (fallback thất bại): {last_error}"
-
-
-# ======================
-# TTS
-# ======================
-def speak_text(text):
-    try:
-        from gtts import gTTS
-        fp = io.BytesIO()
-        clean = text.replace("*", "").replace("$", "")
-        gTTS(text=clean, lang="vi").write_to_fp(fp)
-        fp.seek(0)
-        st.audio(fp.read())
-    except:
-        st.warning("Không thể tạo giọng đọc.")
-
-
-def set_pending_action(action_type):
-    q = st.session_state.user_input_area.strip()
-    if not q:
-        return
-    st.session_state.temp_question = q
-    st.session_state.user_input_area = ""
-    st.session_state.pending_action = action_type
-
-
-# ======================
-# LOGIN SCREEN
-# ======================
-if not st.session_state.user_name or not st.session_state.user_class:
-    st.markdown("""
-        <div style="text-align:center; padding:40px; background:#e8f3ff; border-radius:12px;">
-            <h1 style="font-size:40px;">🤖 GIA SƯ ẢO CỦA BẠN</h1>
-            <h3>Đề tài nghiên cứu khoa học</h3>
-            <p>Hãy nhập họ tên và lớp để bắt đầu</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        name_input = st.text_input("Họ và tên")
-    with col2:
-        class_input = st.text_input("Lớp")
-
-    if st.button("Bắt đầu", use_container_width=True):
-        if name_input.strip() and class_input.strip():
-            st.session_state.user_name = name_input.strip()
-            st.session_state.user_class = class_input.strip()
-            st.rerun()
+        if not result:
+            st.error("❌ Fallback thất bại. Tất cả API key đều hết quota hoặc bị lỗi.")
         else:
-            st.warning("Vui lòng nhập đủ thông tin.")
-    st.stop()
-
-
-# ======================
-# SIDEBAR
-# ======================
-with st.sidebar:
-    st.markdown(f"### 👋 Xin chào, **{st.session_state.user_name}** – Lớp **{st.session_state.user_class}**")
-
-    label = st.selectbox("Model", list(MODEL_OPTIONS.keys()))
-    st.session_state.chosen_model = MODEL_OPTIONS[label]
-
-    st.session_state.style = st.selectbox("Phong cách ảnh", list(STYLE_PROMPT_MAP.keys()))
-
-    st.session_state.tts_enabled = st.checkbox("Bật Text-to-Speech")
-
-
-# ======================
-# UI CHÍNH
-# ======================
-col_left, col_right = st.columns([3, 1])
-
-with col_right:
-    st.subheader("📘 Nhật ký ảnh")
-    for entry in reversed(st.session_state.image_history[-6:]):
-        try:
-            st.image(base64.b64decode(entry["b64"]), width=110)
-        except:
-            st.text("❌ ảnh lỗi")
-
-with col_left:
-    chat_container = st.container()
-
-    def render_chat():
-        for msg in st.session_state.chat_history:
-            bg = "#dff2ff" if msg["role"]=="user" else "#f5e8ff"
-            st.markdown(
-                f"""
-                <div style='background:{bg}; padding:12px; border-radius:12px; margin-bottom:8px;'>
-                    {msg["text"]}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            if msg.get("image_b64"):
-                st.image(base64.b64decode(msg["image_b64"]), use_column_width=True)
-
-    render_chat()
-
-
-# ======================
-# HANDLE REQUEST
-# ======================
-if st.session_state.pending_action:
-
-    q = st.session_state.temp_question
-
-    if st.session_state.pending_action == "text":
-        st.session_state.chat_history.append({"role":"user","text":q})
-
-        if not can_call_api():
-            st.session_state.chat_history.append({
-                "role":"assistant",
-                "text":"⏳ Bạn thao tác nhanh quá. Chờ 3 giây rồi thử lại nhé!"
-            })
-        else:
-            cached = get_cached_answer(q)
-            if cached:
-                st.session_state.chat_history.append({"role":"assistant","text":cached})
-            else:
-                with st.spinner("Đang tạo lời giải..."):
-                    answer, err = call_gemini_text(st.session_state.chosen_model, q)
-
-                if err:
-                    st.session_state.chat_history.append({"role":"assistant","text":f"❌ Lỗi: {err}"})
-                else:
-                    st.session_state.chat_history.append({"role":"assistant","text":answer})
-                    save_cache(q, answer)
-
-                    if st.session_state.tts_enabled:
-                        speak_text(answer)
-
-    elif st.session_state.pending_action == "image":
-        st.session_state.chat_history.append({"role":"user","text":f"[Yêu cầu tạo ảnh] {q}"})
-
-        with st.spinner("Đang tạo ảnh..."):
-            style = STYLE_PROMPT_MAP[st.session_state.style]
-            img_b64, err = call_gemini_image(
-                st.session_state.chosen_model,
-                f"{q}. Style: {style}"
-            )
-
-        if err or not img_b64:
-            st.session_state.chat_history.append({"role":"assistant","text":err})
-        else:
-            st.session_state.chat_history.append({
-                "role":"assistant",
-                "text":"Ảnh đã tạo:",
-                "image_b64": img_b64
-            })
-            st.session_state.image_history.append({
-                "id": str(uuid.uuid4()),
-                "question": q,
-                "b64": img_b64,
-                "style": st.session_state.style,
-                "time": datetime.utcnow().isoformat()
-            })
-
-    st.session_state.pending_action = ""
-    st.session_state.temp_question = ""
-    st.rerun()
-
-
-# ======================
-# INPUT BOX
-# ======================
-st.text_area("Nhập câu hỏi:", key="user_input_area", height=120)
-
-c1, c2 = st.columns(2)
-with c1:
-    st.button("Gửi câu hỏi", on_click=set_pending_action, args=("text",))
-with c2:
-    st.button("Tạo ảnh minh họa", on_click=set_pending_action, args=("image",))
+            text = result["candidates"][0]["content"]["parts"][0]["text"]
+            st.success("✔ Thành công!")
+            st.write(text)
