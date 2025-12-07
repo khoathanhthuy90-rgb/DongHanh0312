@@ -267,3 +267,4 @@ with col1_btn:
 
 with col2_btn:
     st.button("Tạo ảnh minh họa", use_container_width=True, on_click=set_pending_action, args=("image",))
+
